@@ -32,9 +32,22 @@ jobs:
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push Docker image
+        env:
+          NEXT_PUBLIC_API_URL: https://idealring-api.whitepond-90b8fa05.canadacentral.azurecontainerapps.io
+          NEXT_PUBLIC_API_KEY: ${{ secrets.API_KEY }}
+          NEXT_PUBLIC_ENTRA_CLIENT_ID: e11df852-1343-481c-8dbb-ffb634351bd3
+          NEXT_PUBLIC_ENTRA_TENANT_ID: 75ca4369-27c7-44c7-b22d-736f8986f8f5
+          NEXT_PUBLIC_REDIRECT_URI: https://slava-netabridge-frontend.whitepond-90b8fa05.canadacentral.azurecontainerapps.io
         run: |
-          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ github.sha }} .
-          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:latest .
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+            --build-arg NEXT_PUBLIC_API_KEY=$NEXT_PUBLIC_API_KEY \
+            --build-arg NEXT_PUBLIC_ENTRA_CLIENT_ID=$NEXT_PUBLIC_ENTRA_CLIENT_ID \
+            --build-arg NEXT_PUBLIC_ENTRA_TENANT_ID=$NEXT_PUBLIC_ENTRA_TENANT_ID \
+            --build-arg NEXT_PUBLIC_REDIRECT_URI=$NEXT_PUBLIC_REDIRECT_URI \
+            -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ github.sha }} \
+            -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:latest \
+            .
           docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ github.sha }}
           docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:latest
 
@@ -47,4 +60,3 @@ jobs:
           imageToDeploy: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_APP_NAME }}:${{ github.sha }}
           targetPort: 3000
           ingress: external
-          environmentVariables: NEXT_PUBLIC_API_URL=https://idealring-api.whitepond-90b8fa05.canadacentral.azurecontainerapps.io NEXT_PUBLIC_API_KEY=secretref:api-key NEXT_PUBLIC_ENTRA_CLIENT_ID=e11df852-1343-481c-8dbb-ffb634351bd3 NEXT_PUBLIC_ENTRA_TENANT_ID=75ca4369-27c7-44c7-b22d-736f8986f8f5
