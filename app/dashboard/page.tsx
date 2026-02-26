@@ -84,8 +84,8 @@ interface Connection {
 
 const MOCK_STATS: StatCard[] = [
   { label: "Active Connections", value: "24", trend: { value: "3 this month", direction: "up" } },
-  { label: "Open Deals", value: "8", trend: { value: "2 new", direction: "up" } },
-  { label: "Pipeline Value", value: "$1.2M", trend: { value: "15%", direction: "up" } },
+  { label: "Pending Requests", value: "5", trend: { value: "2 new", direction: "up" } },
+  { label: "My Resources", value: "12", trend: { value: "4 active", direction: "up" } },
   { label: "Response Rate", value: "94%", trend: { value: "2%", direction: "down" } },
 ];
 
@@ -419,12 +419,7 @@ function ShellHeader({ user, onLogout }: { user: User | null; onLogout: () => vo
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <button className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors">
-          <Bell size={18} weight="regular" />
-        </button>
-        <button className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors">
-          <Gear size={18} weight="regular" />
-        </button>
+        <NotificationPanel />
         <div className="w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
       </div>
@@ -446,7 +441,6 @@ function Sidebar({ currentPath = "/dashboard" }: { currentPath?: string }) {
       items: [
         { icon: <Package size={18} weight="regular" />, label: "My Resources", href: "/resources" },
         { icon: <ShoppingCart size={18} weight="regular" />, label: "Buy Requests", href: "/buy-requests", badge: 3 },
-        { icon: <Handshake size={18} weight="regular" />, label: "Active Deals", href: "/deals" },
       ],
     },
     {

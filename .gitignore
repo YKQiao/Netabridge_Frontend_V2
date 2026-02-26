@@ -34,3 +34,8 @@ next-env.d.ts
 
 # Misc
 *.log
+.vercel
+
+# Claude Code temp files
+tmpclaude-*
+.claude/
