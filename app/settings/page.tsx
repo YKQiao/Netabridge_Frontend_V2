@@ -74,7 +74,8 @@ const TIMEZONES = [
   { value: "Pacific/Auckland", label: "New Zealand Time (NZT)" },
 ];
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use Next.js proxy (bypasses CORS)
+const API_BASE = "";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
 // =============================================================================

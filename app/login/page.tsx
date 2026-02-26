@@ -44,7 +44,7 @@ export default function LoginPage() {
       if (response.account) {
         instance.setActiveAccount(response.account);
 
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const API_BASE = ""; // Use Next.js proxy
         const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
         const token = response.idToken;
 
@@ -120,7 +120,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const API_BASE = ""; // Use Next.js proxy
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
       const response = await fetch(

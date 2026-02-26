@@ -711,10 +711,10 @@ export default function DashboardPage() {
 
     const fetchUser = async () => {
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        // Use relative URL to leverage Next.js proxy (bypasses CORS)
         const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-        const response = await fetch(`${API_BASE}/api/v1/users/me`, {
+        const response = await fetch(`/api/v1/users/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "X-API-Key": API_KEY,
