@@ -6,7 +6,9 @@
 import { msalInstance } from "./auth/MsalProvider";
 import { loginRequest } from "./auth/msalConfig";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use relative URL to leverage Next.js rewrites (bypasses CORS)
+// Next.js proxies /api/* to the backend defined in next.config.ts
+const API_BASE = "";
 const API_PREFIX = "/api/v1";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
