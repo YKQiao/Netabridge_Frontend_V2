@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import {
   Buildings,
   PencilSimple,
@@ -188,17 +189,17 @@ function Card({
 
 function CardHeader({
   title,
-  icon: Icon,
+  icon: IconComponent,
   action,
 }: {
   title: string;
-  icon: React.ComponentType<{ size?: number; weight?: string; className?: string }>;
+  icon: Icon;
   action?: React.ReactNode;
 }) {
   return (
     <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <Icon size={18} weight="regular" className="text-gray-400" />
+        <IconComponent size={18} weight="regular" className="text-gray-400" />
         <h2 className="text-[15px] font-semibold text-gray-900">{title}</h2>
       </div>
       {action}

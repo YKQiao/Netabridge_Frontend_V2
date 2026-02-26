@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import {
   EnvelopeSimple,
   DeviceMobile,
@@ -69,12 +70,12 @@ function Toggle({ enabled, onChange, disabled = false }: ToggleProps) {
 }
 
 function SettingRow({
-  icon: Icon,
+  icon: IconComponent,
   label,
   description,
   children,
 }: {
-  icon: React.ComponentType<{ size?: number; weight?: "regular" | "fill"; className?: string }>;
+  icon: Icon;
   label: string;
   description?: string;
   children: React.ReactNode;
@@ -83,7 +84,7 @@ function SettingRow({
     <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-b-0">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded bg-gray-50 flex items-center justify-center">
-          <Icon size={16} weight="regular" className="text-gray-400" />
+          <IconComponent size={16} weight="regular" className="text-gray-400" />
         </div>
         <div>
           <div className="text-[13px] font-medium text-gray-900">{label}</div>
@@ -98,12 +99,12 @@ function SettingRow({
 }
 
 function SectionCard({
-  icon: Icon,
+  icon: IconComponent,
   title,
   description,
   children,
 }: {
-  icon: React.ComponentType<{ size?: number; weight?: "regular" | "fill"; className?: string }>;
+  icon: Icon;
   title: string;
   description: string;
   children: React.ReactNode;
@@ -112,7 +113,7 @@ function SectionCard({
     <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-3">
         <div className="w-9 h-9 rounded bg-[#EEF4FB] flex items-center justify-center">
-          <Icon size={18} weight="regular" className="text-[#4A7DC4]" />
+          <IconComponent size={18} weight="regular" className="text-[#4A7DC4]" />
         </div>
         <div>
           <h2 className="text-[15px] font-semibold text-gray-900">{title}</h2>

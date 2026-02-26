@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Icon } from "@phosphor-icons/react";
 import {
   Lock,
   ShieldCheck,
@@ -107,13 +108,13 @@ const MOCK_RECOVERY_CODES = [
 // =============================================================================
 
 function SectionCard({
-  icon: Icon,
+  icon: IconComponent,
   title,
   description,
   children,
   badge,
 }: {
-  icon: React.ComponentType<{ size?: number; weight?: "regular" | "fill"; className?: string }>;
+  icon: Icon;
   title: string;
   description: string;
   children: React.ReactNode;
@@ -123,7 +124,7 @@ function SectionCard({
     <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex items-start gap-4">
         <div className="w-10 h-10 rounded-md bg-[#EEF4FB] flex items-center justify-center flex-shrink-0">
-          <Icon size={20} weight="fill" className="text-[#4A7DC4]" />
+          <IconComponent size={20} weight="fill" className="text-[#4A7DC4]" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
