@@ -43,8 +43,9 @@ if (isCIAM) {
   authority = `https://${b2cTenantName}.b2clogin.com/${b2cTenantName}.onmicrosoft.com/${b2cPolicyName}`;
   knownAuthorities = [`${b2cTenantName}.b2clogin.com`];
 } else {
-  // Regular Entra ID (workforce)
-  authority = `https://login.microsoftonline.com/${tenantId}`;
+  // Multi-tenant Entra ID - use /common for any Microsoft account
+  // Use /organizations for work/school only, /consumers for personal only
+  authority = `https://login.microsoftonline.com/common`;
   knownAuthorities = [];
 }
 
