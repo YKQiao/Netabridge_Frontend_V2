@@ -35,7 +35,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: https://idealring-api.whitepond-90b8fa05.canadacentral.azurecontainerapps.io
           NEXT_PUBLIC_API_KEY: ${{ secrets.API_KEY }}
-          NEXT_PUBLIC_ENTRA_CLIENT_ID: e11df852-1343-481c-8dbb-ffb634351bd3
+          NEXT_PUBLIC_ENTRA_CLIENT_ID: 628b2c60-dd5c-409b-9630-964477f7abbb
           NEXT_PUBLIC_ENTRA_TENANT_ID: 75ca4369-27c7-44c7-b22d-736f8986f8f5
           NEXT_PUBLIC_REDIRECT_URI: https://slava-netabridge-frontend.whitepond-90b8fa05.canadacentral.azurecontainerapps.io
         run: |

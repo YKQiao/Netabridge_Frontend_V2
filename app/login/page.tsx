@@ -12,10 +12,10 @@ const ButtonParticles = dynamic(() => import("@/components/ButtonParticles"), {
   ssr: false,
 });
 
-// Check if we're in dev mode (MSAL not configured)
-const isDev =
-  !process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID ||
-  process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID === "00000000-0000-0000-0000-000000000000";
+
+
+
+
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,9 +25,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isDev, setIsDev] = useState(false);
 
-  // Check if we have a backend token (not just MSAL auth)
+  // Check dev mode and existing token on client only (avoid hydration mismatch)
   useEffect(() => {
+    const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
+    setIsDev(!clientId || clientId === "00000000-0000-0000-0000-000000000000");
+
     const token = sessionStorage.getItem("access_token");
     if (token) {
       router.push("/dashboard");
