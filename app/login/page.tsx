@@ -92,12 +92,13 @@ function LoginContent() {
       const API_BASE = "";
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-      // Get token silently since user is already authenticated
+      // Get access token silently since user is already authenticated
       instance.acquireTokenSilent({
         ...loginRequest,
         account: account,
       }).then((response) => {
-        const token = response.idToken;
+        // Use accessToken for API calls (has correct audience for backend)
+        const token = response.accessToken;
 
         // Check if user exists and needs password setup (skip in dev mode)
         const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
