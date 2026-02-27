@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { loginRequest } from "@/lib/auth/msalConfig";
@@ -12,11 +12,6 @@ const ButtonParticles = dynamic(() => import("@/components/ButtonParticles"), {
   ssr: false,
 });
 
-
-
-
-
-
 export default function LoginPage() {
   const router = useRouter();
   const { instance } = useMsal();
@@ -26,6 +21,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isDev, setIsDev] = useState(false);
+  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [accountExists, setAccountExists] = useState(false);
+  const checkEmailRef = useRef<string>("");
 
   // Check dev mode, existing token, and try silent auth on client only
   useEffect(() => {
@@ -51,7 +49,6 @@ export default function LoginPage() {
           router.push("/dashboard");
         }
       }).catch(() => {
-        // Silent auth failed, user needs to login interactively
         setLoading(false);
       });
     }
@@ -62,9 +59,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // Use redirect for faster, more reliable login (avoids popup blockers and COOP issues)
       await instance.loginRedirect(loginRequest);
-      // Note: Page will redirect, so code below won't execute
     } catch (err: any) {
       const errorCode = err?.errorCode || "";
       console.error("Login redirect failed:", err);
@@ -90,7 +85,49 @@ export default function LoginPage() {
           const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
           const token = response.idToken;
 
-          // Sync user with backend (don't block on this)
+          // Check if user exists and needs password setup (skip in dev mode)
+          const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
+          const isDevMode = !clientId || clientId === "00000000-0000-0000-0000-000000000000";
+
+          if (!isDevMode) {
+            try {
+              const checkResp = await fetch(`${API_BASE}/api/v1/auth/check-account`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-API-Key": API_KEY,
+                },
+                body: JSON.stringify({
+                  email: response.account.username || "",
+                  oauth_provider: "microsoft",
+                }),
+              });
+
+              if (checkResp.ok) {
+                const checkData = await checkResp.json().catch(() => ({}));
+
+                if (checkData.needs_password_setup) {
+                  // New OAuth user - redirect to set password
+                  sessionStorage.setItem("pending_oauth_token", token);
+                  sessionStorage.setItem("needs_password_setup", "true");
+                  router.push("/set-password");
+                  return;
+                }
+
+                if (checkData.account_exists && !checkData.is_linked) {
+                  // Account exists but not linked to Microsoft - require password verification
+                  sessionStorage.setItem("pending_oauth_token", token);
+                  sessionStorage.setItem("pending_link_email", response.account.username || "");
+                  router.push(`/verify-link?email=${encodeURIComponent(response.account.username || "")}`);
+                  return;
+                }
+              }
+            } catch {
+              // Endpoint not available, continue with normal flow
+            }
+          }
+
+          // Normal OAuth login - sync and proceed
           fetch(`${API_BASE}/api/v1/auth/sync`, {
             method: "POST",
             headers: {
@@ -116,6 +153,46 @@ export default function LoginPage() {
     handleRedirectResponse();
   }, [instance, router]);
 
+  // Check if email exists when user finishes typing
+  const handleEmailBlur = async () => {
+    if (!email) return;
+    setShowPasswordField(true);
+
+    // In dev mode, skip account check
+    if (isDev) {
+      setAccountExists(false);
+      return;
+    }
+
+    // Track current email to prevent race conditions
+    const currentEmail = email;
+    checkEmailRef.current = currentEmail;
+
+    try {
+      const API_BASE = "";
+      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+
+      const response = await fetch(`${API_BASE}/api/v1/auth/check-account`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": API_KEY,
+        },
+        body: JSON.stringify({ email: currentEmail }),
+      });
+
+      // Only update state if this is still the current check
+      if (checkEmailRef.current !== currentEmail) return;
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setAccountExists(data.account_exists || false);
+      }
+    } catch {
+      // Endpoint not available, assume dev mode behavior
+    }
+  };
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
@@ -127,47 +204,89 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const API_BASE = ""; // Use Next.js proxy
+      const API_BASE = "";
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/auth/dev/login?email=${encodeURIComponent(email)}`,
-        {
-          method: "POST",
-          headers: { "X-API-Key": API_KEY },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Authentication failed");
-      }
-
-      const data = await response.json();
-
-      sessionStorage.setItem("access_token", data.access_token);
-      sessionStorage.setItem("user_oid", data.user_oid);
-
-      try {
-        await fetch(`${API_BASE}/api/v1/auth/sync`, {
+      // If password provided, try login (regardless of accountExists - check may have failed)
+      if (password) {
+        const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${data.access_token}`,
             "X-API-Key": API_KEY,
           },
-          body: JSON.stringify({
-            email: email,
-            display_name: email
-              .split("@")[0]
-              .replace(/[._]/g, " ")
-              .replace(/\b\w/g, (c) => c.toUpperCase()),
-          }),
+          body: JSON.stringify({ email, password }),
         });
-      } catch (syncError) {
-        console.warn("User sync failed:", syncError);
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error("Invalid email or password");
+          }
+          throw new Error("Authentication failed");
+        }
+
+        const data = await response.json();
+        sessionStorage.setItem("access_token", data.access_token);
+        if (data.user_oid) {
+          sessionStorage.setItem("user_oid", data.user_oid);
+        }
+        router.push("/dashboard");
+        return;
       }
 
-      router.push("/dashboard");
+      // Dev mode fallback (no password required)
+      if (isDev) {
+        const response = await fetch(
+          `${API_BASE}/api/v1/auth/dev/login?email=${encodeURIComponent(email)}`,
+          {
+            method: "POST",
+            headers: { "X-API-Key": API_KEY },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Authentication failed");
+        }
+
+        const data = await response.json();
+        sessionStorage.setItem("access_token", data.access_token);
+        sessionStorage.setItem("user_oid", data.user_oid);
+
+        try {
+          await fetch(`${API_BASE}/api/v1/auth/sync`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${data.access_token}`,
+              "X-API-Key": API_KEY,
+            },
+            body: JSON.stringify({
+              email: email,
+              display_name: email
+                .split("@")[0]
+                .replace(/[._]/g, " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase()),
+            }),
+          });
+        } catch (syncError) {
+          console.warn("User sync failed:", syncError);
+        }
+
+        router.push("/dashboard");
+        return;
+      }
+
+      // Account doesn't exist - redirect to signup
+      if (!accountExists) {
+        setError("No account found with this email. Please sign up first.");
+        return;
+      }
+
+      // Account exists but no password entered
+      if (!password) {
+        setError("Please enter your password");
+        return;
+      }
     } catch (err: any) {
       console.error("Login failed:", err);
 
@@ -175,7 +294,7 @@ export default function LoginPage() {
 
       if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
         friendlyMessage = "Unable to connect to server. Please check your connection.";
-      } else if (err.message?.includes("401") || err.message?.includes("Unauthorized")) {
+      } else if (err.message?.includes("Invalid email or password")) {
         friendlyMessage = "Invalid email or password.";
       } else if (err.message?.includes("404")) {
         friendlyMessage = "Service unavailable. Please try again later.";
@@ -207,7 +326,6 @@ export default function LoginPage() {
 
         {/* SSO Buttons */}
         <div className="space-y-3 mb-4 animate-stagger">
-          {/* Microsoft - SAP style: outlined with border */}
           <button
             onClick={handleMicrosoftLogin}
             disabled={loading}
@@ -222,7 +340,6 @@ export default function LoginPage() {
             Continue with Microsoft
           </button>
 
-          {/* Google - Coming Soon */}
           <button
             disabled
             className="w-full h-10 flex items-center justify-center gap-2 border border-[var(--border-default)] text-[var(--text-muted)] text-sm font-medium rounded-md cursor-not-allowed relative bg-[var(--bg-card)] btn-click"
@@ -239,7 +356,6 @@ export default function LoginPage() {
             </span>
           </button>
 
-          {/* LinkedIn - Coming Soon */}
           <button
             disabled
             className="w-full h-10 flex items-center justify-center gap-2 border border-[var(--border-default)] text-[var(--text-muted)] text-sm font-medium rounded-md cursor-not-allowed relative bg-[var(--bg-card)] btn-click"
@@ -264,7 +380,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Email Form - Always visible */}
+        {/* Email Form */}
         <form onSubmit={handleEmailLogin} className="space-y-3">
           <div>
             <input
@@ -272,18 +388,29 @@ export default function LoginPage() {
               placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={handleEmailBlur}
               className="w-full h-10 px-3 text-sm border border-[var(--border-default)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
             />
           </div>
-          <div>
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-10 px-3 text-sm border border-[var(--border-default)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
-            />
-          </div>
+          {(showPasswordField || password) && (
+            <div className="animate-fade-in-up">
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full h-10 px-3 text-sm border border-[var(--border-default)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
+              />
+              <div className="mt-1 text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-[var(--accent)] hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}
@@ -307,13 +434,13 @@ export default function LoginPage() {
         <div className="mt-4 p-3 bg-[var(--warning-50)] border border-[var(--warning-500)]/30 rounded-lg animate-fade-in-up">
           <div className="text-xs font-medium text-[var(--warning-600)] mb-1">Development Mode</div>
           <p className="text-xs text-[var(--warning-500)]">
-            SSO not configured. Email login uses dev endpoint.
+            SSO not configured. Email login uses dev endpoint (password optional).
           </p>
         </div>
       )}
 
       <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
-        Don't have an account?{" "}
+        Don&apos;t have an account?{" "}
         <Link href="/signup" className="text-[var(--accent)] hover:underline font-medium">
           Sign up
         </Link>

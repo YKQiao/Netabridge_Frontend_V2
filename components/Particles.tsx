@@ -41,7 +41,7 @@ const ParticlesBackground = memo(function ParticlesBackground({ className }: Par
         },
         move: {
           enable: true,
-          speed: 0.3, // Slower speed
+          speed: 0.25,
           direction: "none",
           random: false,
           straight: false,
@@ -49,13 +49,24 @@ const ParticlesBackground = memo(function ParticlesBackground({ className }: Par
           bounce: true,
         },
       },
-      // Disable ALL interactivity to prevent resets from user actions
       interactivity: {
-        detectsOn: "window",
+        detectsOn: "canvas",
         events: {
-          onHover: { enable: false },
+          onHover: {
+            enable: true,
+            mode: "grab",
+          },
           onClick: { enable: false },
           resize: { enable: true },
+        },
+        modes: {
+          grab: {
+            distance: 160,
+            links: {
+              opacity: 0.5,
+              blink: false,
+            },
+          },
         },
       },
       background: { color: "transparent" },

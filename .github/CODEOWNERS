@@ -1,0 +1,13 @@
+# Default owners for everything in the repo
+* @slavasolutions
+
+# Frontend components
+/components/ @slavasolutions
+/app/ @slavasolutions
+
+# Auth and security
+/lib/auth/ @slavasolutions
+/lib/passwordValidation.ts @slavasolutions
+
+# Configuration
+/.github/ @slavasolutions

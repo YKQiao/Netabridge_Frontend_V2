@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import AuthLayout from "@/components/AuthLayout";
+import { PasswordInput, ConfirmPasswordInput } from "@/components/PasswordInput";
+import { validatePassword, doPasswordsMatch, validateEmail } from "@/lib/passwordValidation";
 
 const ButtonParticles = dynamic(() => import("@/components/ButtonParticles"), {
   ssr: false,
@@ -18,14 +20,29 @@ export default function SignupPage() {
 
   // Form fields
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [companyName, setCompanyName] = useState("");
+
+  const passwordValidation = validatePassword(password);
+  const passwordsMatch = doPasswordsMatch(password, confirmPassword);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !displayName) {
+    if (!email || !displayName || !password) {
       setError("Please fill in all required fields");
+      return;
+    }
+
+    if (!passwordValidation.isValid) {
+      setError("Password does not meet requirements");
+      return;
+    }
+
+    if (!passwordsMatch) {
+      setError("Passwords do not match");
       return;
     }
 
@@ -33,48 +50,74 @@ export default function SignupPage() {
     setError("");
 
     try {
-      // Use relative URL to leverage Next.js proxy (bypasses CORS)
       const API_BASE = "";
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+      let token: string;
+      let userOid: string | undefined;
 
-      // Step 1: Create user via dev login endpoint
-      const loginResp = await fetch(
-        `${API_BASE}/api/v1/auth/dev/login?email=${encodeURIComponent(email)}`,
-        {
-          method: "POST",
-          headers: { "X-API-Key": API_KEY },
-        }
-      );
-
-      if (!loginResp.ok) {
-        const errText = await loginResp.text();
-        throw new Error(`Failed to create account: ${errText}`);
-      }
-
-      const loginData = await loginResp.json();
-      const token = loginData.access_token;
-
-      // Step 2: Sync user profile with display name
-      const syncResp = await fetch(`${API_BASE}/api/v1/auth/sync`, {
+      // Try register endpoint first (production)
+      const registerResp = await fetch(`${API_BASE}/api/v1/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
           "X-API-Key": API_KEY,
         },
         body: JSON.stringify({
-          email: email,
+          email,
+          password,
           display_name: companyName ? `${displayName} (${companyName})` : displayName,
         }),
       });
 
-      if (!syncResp.ok) {
-        console.warn("Profile sync failed, but account was created");
+      if (registerResp.ok) {
+        const registerData = await registerResp.json();
+        token = registerData.access_token;
+        userOid = registerData.user_oid;
+      } else if (registerResp.status === 409) {
+        throw new Error("An account with this email already exists. Please sign in instead.");
+      } else if (registerResp.status === 404 || registerResp.status === 501) {
+        // Fallback to dev endpoint only if register endpoint not implemented
+        console.warn("Register endpoint not available, using dev fallback");
+        const devResp = await fetch(
+          `${API_BASE}/api/v1/auth/dev/login?email=${encodeURIComponent(email)}`,
+          {
+            method: "POST",
+            headers: { "X-API-Key": API_KEY },
+          }
+        );
+
+        if (!devResp.ok) {
+          throw new Error("Failed to create account");
+        }
+
+        const devData = await devResp.json();
+        token = devData.access_token;
+        userOid = devData.user_oid;
+
+        // Sync profile
+        await fetch(`${API_BASE}/api/v1/auth/sync`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            "X-API-Key": API_KEY,
+          },
+          body: JSON.stringify({
+            email,
+            display_name: companyName ? `${displayName} (${companyName})` : displayName,
+          }),
+        }).catch((e) => console.warn("Profile sync failed:", e));
+      } else {
+        // Real error from backend (400 validation, 500 server error, etc.)
+        const errorData = await registerResp.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to create account");
       }
 
       // Store token and redirect
       sessionStorage.setItem("access_token", token);
-      sessionStorage.setItem("user_oid", loginData.user_oid);
+      if (userOid) {
+        sessionStorage.setItem("user_oid", userOid);
+      }
 
       router.push("/dashboard");
     } catch (err: any) {
@@ -87,12 +130,32 @@ export default function SignupPage() {
 
   const goToStep2 = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
-      setError("Please enter your email address");
+
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+      setError(emailValidation.error || "Invalid email");
       return;
     }
+
     setError("");
     setStep(2);
+  };
+
+  const goToStep3 = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!passwordValidation.isValid) {
+      setError("Password does not meet all requirements");
+      return;
+    }
+
+    if (!passwordsMatch) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setError("");
+    setStep(3);
   };
 
   return (
@@ -102,14 +165,19 @@ export default function SignupPage() {
         <div className="flex items-center gap-2 mb-6">
           <div className={`h-1 flex-1 rounded-full transition-colors duration-300 ${step >= 1 ? 'bg-[var(--accent)]' : 'bg-[var(--gray-200)]'}`} />
           <div className={`h-1 flex-1 rounded-full transition-colors duration-300 ${step >= 2 ? 'bg-[var(--accent)]' : 'bg-[var(--gray-200)]'}`} />
+          <div className={`h-1 flex-1 rounded-full transition-colors duration-300 ${step >= 3 ? 'bg-[var(--accent)]' : 'bg-[var(--gray-200)]'}`} />
         </div>
 
         <div className="text-center mb-6">
           <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">
-            {step === 1 ? "Create your account" : "Tell us about yourself"}
+            {step === 1 ? "Create your account" : step === 2 ? "Secure your account" : "Tell us about yourself"}
           </h2>
           <p className="text-sm text-[var(--text-muted)]">
-            {step === 1 ? "Enter your email to get started" : "Help others find and connect with you"}
+            {step === 1
+              ? "Enter your email to get started"
+              : step === 2
+              ? "Create a strong password"
+              : "Help others find and connect with you"}
           </p>
         </div>
 
@@ -148,8 +216,56 @@ export default function SignupPage() {
           </form>
         )}
 
-        {/* Step 2: Profile Details */}
+        {/* Step 2: Password */}
         {step === 2 && (
+          <form onSubmit={goToStep3} className="space-y-4 animate-fade-in-up">
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                Password <span className="text-[var(--error-500)]">*</span>
+              </label>
+              <PasswordInput
+                value={password}
+                onChange={setPassword}
+                placeholder="Create a strong password"
+                showStrength
+                showRequirements
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                Confirm Password <span className="text-[var(--error-500)]">*</span>
+              </label>
+              <ConfirmPasswordInput
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                originalPassword={password}
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="flex-1 h-10 border border-[var(--border-default)] text-[var(--text-secondary)] text-sm font-medium rounded-md hover:bg-[var(--gray-100)] transition-all btn-click"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={!passwordValidation.isValid || !passwordsMatch}
+                className="flex-1 h-10 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-all relative overflow-hidden bg-[var(--brand-500)] hover:bg-[var(--brand-600)] btn-click"
+              >
+                <ButtonParticles className="absolute inset-0 z-0" />
+                <span className="relative z-10">Continue</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Step 3: Profile Details */}
+        {step === 3 && (
           <form onSubmit={handleSignup} className="space-y-4 animate-fade-in-up">
             <div>
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
@@ -182,7 +298,7 @@ export default function SignupPage() {
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={() => setStep(2)}
                 className="flex-1 h-10 border border-[var(--border-default)] text-[var(--text-secondary)] text-sm font-medium rounded-md hover:bg-[var(--gray-100)] transition-all btn-click"
               >
                 Back

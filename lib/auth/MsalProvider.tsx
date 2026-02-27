@@ -17,53 +17,50 @@ const msalInstance = new PublicClientApplication(msalConfig);
 let initializationPromise: Promise<void> | null = null;
 let isInitialized = false;
 
-// Initialize MSAL once
+// Initialize MSAL once - optimized for speed
 async function initializeMsal(): Promise<void> {
   if (isInitialized) return;
 
   if (!initializationPromise) {
     initializationPromise = (async () => {
       try {
-        console.log("[Auth] Initializing MSAL...");
+        // Fast init - just initialize the instance
         await msalInstance.initialize();
 
-        // Handle any redirect response
-        try {
-          const response = await msalInstance.handleRedirectPromise();
-          if (response) {
-            console.log("[Auth] Redirect login successful");
-            msalInstance.setActiveAccount(response.account);
-          }
-        } catch (redirectError) {
-          console.error("[Auth] Redirect handling error:", redirectError);
-          clearStuckAuthState();
-        }
-
-        // Set active account if one exists
+        // Set active account immediately if one exists (sync, fast)
         const accounts = msalInstance.getAllAccounts();
         if (accounts.length > 0) {
           msalInstance.setActiveAccount(accounts[0]);
-          console.log("[Auth] Active account set:", accounts[0].username);
         }
 
-        // Listen for auth events
+        // Listen for auth events (sync, fast)
         msalInstance.addEventCallback((event) => {
           if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
             const payload = event.payload as AuthenticationResult;
             msalInstance.setActiveAccount(payload.account);
-            console.log("[Auth] Login success:", payload.account?.username);
           }
           if (event.eventType === EventType.LOGIN_FAILURE) {
-            console.error("[Auth] Login failed:", event.error);
             clearStuckAuthState();
-          }
-          if (event.eventType === EventType.ACQUIRE_TOKEN_FAILURE) {
-            console.error("[Auth] Token acquisition failed:", event.error);
           }
         });
 
         isInitialized = true;
-        console.log("[Auth] MSAL initialized successfully");
+
+        // Handle redirect response AFTER marking as initialized (non-blocking)
+        // This runs in background - doesn't block the UI
+        msalInstance.handleRedirectPromise()
+          .then((response) => {
+            if (response) {
+              msalInstance.setActiveAccount(response.account);
+              // Trigger re-render by dispatching storage event
+              window.dispatchEvent(new Event('msal:redirectComplete'));
+            }
+          })
+          .catch((redirectError) => {
+            console.error("[Auth] Redirect handling error:", redirectError);
+            clearStuckAuthState();
+          });
+
       } catch (error) {
         console.error("[Auth] MSAL initialization failed:", error);
         initializationPromise = null;
@@ -111,53 +108,21 @@ interface Props {
 }
 
 export function MsalProvider({ children }: Props) {
-  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    let timeoutId: NodeJS.Timeout;
+    // Initialize MSAL in background - doesn't block render
+    initializeMsal().catch((err) => {
+      console.error("[Auth] Init error:", err);
 
-    // Set a timeout for initialization (10 seconds)
-    timeoutId = setTimeout(() => {
-      if (mounted && !ready) {
-        console.error("[Auth] Initialization timeout - clearing stuck state");
+      // Only show error for critical auth failures
+      if (err instanceof BrowserAuthError && err.errorCode === "interaction_in_progress") {
         clearStuckAuthState();
-        setError("Authentication initialization timed out. Please refresh the page.");
+        setError("Previous login was interrupted. Please try again.");
       }
-    }, 10000);
-
-    initializeMsal()
-      .then(() => {
-        if (mounted) {
-          setReady(true);
-          clearTimeout(timeoutId);
-        }
-      })
-      .catch((err) => {
-        if (mounted) {
-          console.error("[Auth] Init error:", err);
-          clearTimeout(timeoutId);
-
-          // Handle specific MSAL errors
-          if (err instanceof BrowserAuthError) {
-            if (err.errorCode === "interaction_in_progress") {
-              clearStuckAuthState();
-              setError("Previous login was interrupted. Please try again.");
-            } else {
-              setError(`Authentication error: ${err.errorMessage}`);
-            }
-          } else {
-            setError("Failed to initialize authentication. Please refresh.");
-          }
-        }
-      });
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
-    };
-  }, [ready]);
+      // Other errors: log but don't block - app will work without SSO
+    });
+  }, []);
 
   if (error) {
     return (
@@ -178,17 +143,7 @@ export function MsalProvider({ children }: Props) {
     );
   }
 
-  if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="text-gray-500 mb-2">Initializing authentication...</div>
-          <div className="text-xs text-gray-400">If this takes too long, try refreshing</div>
-        </div>
-      </div>
-    );
-  }
-
+  // Render immediately - MSAL initializes in background
   return (
     <MsalReactProvider instance={msalInstance}>
       {children}
