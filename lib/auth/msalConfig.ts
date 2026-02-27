@@ -94,15 +94,12 @@ export const msalConfig: Configuration = {
   },
 };
 
-// Backend API client ID (for access token audience)
-const apiClientId = process.env.NEXT_PUBLIC_API_CLIENT_ID || clientId;
-
-// Scopes for login - includes API scope to get access token for backend
+// Scopes for login - basic profile scopes (idToken)
 export const loginRequest = {
-  scopes: ["openid", "profile", "email", `api://${apiClientId}/access_as_user`],
+  scopes: ["openid", "profile", "email"],
 };
 
-// Scopes for calling your backend API (for silent token refresh)
+// Scopes for calling your backend API (if registered in Azure AD)
 export const apiRequest = {
-  scopes: [`api://${apiClientId}/access_as_user`],
+  scopes: ["openid", "profile", "email"],
 };
