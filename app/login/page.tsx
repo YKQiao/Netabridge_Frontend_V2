@@ -59,86 +59,95 @@ export default function LoginPage() {
     }
   };
 
-  // Handle redirect response (runs after returning from Microsoft login)
+  // Handle successful authentication from MSAL (after redirect)
+  // We listen for the active account being set by MsalProvider
   useEffect(() => {
-    const handleRedirectResponse = async () => {
-      try {
-        const response = await instance.handleRedirectPromise();
-        if (response?.account) {
-          setLoading(true);
-          instance.setActiveAccount(response.account);
+    const account = instance.getActiveAccount();
+    if (account && isAuthenticated) {
+      // User is authenticated via Microsoft
+      setLoading(true);
 
-          const API_BASE = "";
-          const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-          const token = response.idToken;
+      const API_BASE = "";
+      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-          // Check if user exists and needs password setup (skip in dev mode)
-          const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
-          const isDevMode = !clientId || clientId === "00000000-0000-0000-0000-000000000000";
+      // Get token silently since user is already authenticated
+      instance.acquireTokenSilent({
+        ...loginRequest,
+        account: account,
+      }).then((response) => {
+        const token = response.idToken;
 
-          if (!isDevMode) {
-            try {
-              const checkResp = await fetch(`${API_BASE}/api/v1/auth/check-account`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-API-Key": API_KEY,
-                },
-                body: JSON.stringify({
-                  email: response.account.username || "",
-                  oauth_provider: "microsoft",
-                }),
-              });
+        // Check if user exists and needs password setup (skip in dev mode)
+        const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
+        const isDevMode = !clientId || clientId === "00000000-0000-0000-0000-000000000000";
 
-              if (checkResp.ok) {
-                const checkData = await checkResp.json().catch(() => ({}));
-
-                if (checkData.needs_password_setup) {
-                  // New OAuth user - redirect to set password
-                  sessionStorage.setItem("pending_oauth_token", token);
-                  sessionStorage.setItem("needs_password_setup", "true");
-                  router.push("/set-password");
-                  return;
-                }
-
-                if (checkData.account_exists && !checkData.is_linked) {
-                  // Account exists but not linked to Microsoft - require password verification
-                  sessionStorage.setItem("pending_oauth_token", token);
-                  sessionStorage.setItem("pending_link_email", response.account.username || "");
-                  router.push(`/verify-link?email=${encodeURIComponent(response.account.username || "")}`);
-                  return;
-                }
-              }
-            } catch {
-              // Endpoint not available, continue with normal flow
-            }
-          }
-
-          // Normal OAuth login - sync and proceed
-          fetch(`${API_BASE}/api/v1/auth/sync`, {
+        if (!isDevMode) {
+          fetch(`${API_BASE}/api/v1/auth/check-account`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
               "X-API-Key": API_KEY,
             },
             body: JSON.stringify({
-              email: response.account.username || "",
-              display_name: response.account.name || response.account.username || "",
+              email: account.username || "",
+              oauth_provider: "microsoft",
             }),
-          }).catch((e) => console.warn("User sync error:", e));
+          }).then(checkResp => {
+            if (checkResp.ok) {
+              return checkResp.json().catch(() => ({}));
+            }
+            return {};
+          }).then(checkData => {
+            if (checkData.needs_password_setup) {
+              sessionStorage.setItem("pending_oauth_token", token);
+              sessionStorage.setItem("needs_password_setup", "true");
+              router.push("/set-password");
+              return;
+            }
 
-          sessionStorage.setItem("access_token", token);
-          router.push("/dashboard");
+            if (checkData.account_exists && !checkData.is_linked) {
+              sessionStorage.setItem("pending_oauth_token", token);
+              sessionStorage.setItem("pending_link_email", account.username || "");
+              router.push(`/verify-link?email=${encodeURIComponent(account.username || "")}`);
+              return;
+            }
+
+            // Normal flow - save token and go to dashboard
+            finishLogin(token, account, API_BASE, API_KEY);
+          }).catch(() => {
+            // Endpoint not available, continue with normal flow
+            finishLogin(token, account, API_BASE, API_KEY);
+          });
+        } else {
+          // Dev mode - just finish login
+          finishLogin(token, account, API_BASE, API_KEY);
         }
-      } catch (err) {
-        console.error("Redirect handling error:", err);
+      }).catch((err) => {
+        console.error("Token acquisition error:", err);
         setLoading(false);
-      }
-    };
+      });
+    }
+  }, [isAuthenticated, instance, router]);
 
-    handleRedirectResponse();
-  }, [instance, router]);
+  // Helper to finish login process
+  const finishLogin = (token: string, account: any, API_BASE: string, API_KEY: string) => {
+    // Sync user with backend
+    fetch(`${API_BASE}/api/v1/auth/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        "X-API-Key": API_KEY,
+      },
+      body: JSON.stringify({
+        email: account.username || "",
+        display_name: account.name || account.username || "",
+      }),
+    }).catch((e) => console.warn("User sync error:", e));
+
+    sessionStorage.setItem("access_token", token);
+    router.push("/dashboard");
+  };
 
   // Check if email exists when user finishes typing
   const handleEmailBlur = async () => {
