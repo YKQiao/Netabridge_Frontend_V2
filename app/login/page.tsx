@@ -4,15 +4,36 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { loginRequest } from "@/lib/auth/msalConfig";
+import { isPreviewMode } from "@/lib/auth/previewMode";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import AuthLayout from "@/components/AuthLayout";
+import { BrandedLoading } from "@/components/ui/BrandedLoading";
 
 const ButtonParticles = dynamic(() => import("@/components/ButtonParticles"), {
   ssr: false,
 });
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  // In preview mode, redirect to dashboard immediately (session already initialized)
+  useEffect(() => {
+    if (isPreviewMode) {
+      router.push("/dashboard");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Show loading while redirecting in preview mode
+  if (isPreviewMode) {
+    return <BrandedLoading context="init" />;
+  }
+
+  return <LoginContent />;
+}
+
+function LoginContent() {
   const router = useRouter();
   const { instance } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -39,7 +60,8 @@ export default function LoginPage() {
     // Don't auto-silently authenticate - this causes redirect loops
     // if the backend doesn't recognize the MSAL token.
     // Let the user explicitly click "Sign in with Microsoft"
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleMicrosoftLogin = async () => {
     setLoading(true);
@@ -301,6 +323,11 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Show branded loading when signing in
+  if (loading) {
+    return <BrandedLoading context="login" />;
+  }
 
   return (
     <AuthLayout variant="login">

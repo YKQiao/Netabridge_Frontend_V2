@@ -177,7 +177,10 @@ function UserDropdown({ user, onLogout }: { user: UserProfile | null; onLogout: 
 
 function ShellHeader({ user, onLogout }: { user: UserProfile | null; onLogout: () => void }) {
   return (
-    <header className="h-14 bg-[#354A5F] flex items-center justify-between px-6 flex-shrink-0">
+    <header
+      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
+    >
       {/* Logo Lockup */}
       <LogoWithName variant="white" size="md" />
 
@@ -377,7 +380,8 @@ export default function ProfilePage() {
     };
 
     fetchUser();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem("access_token");

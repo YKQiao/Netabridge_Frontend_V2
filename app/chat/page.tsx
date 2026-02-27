@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
   Robot,
@@ -12,21 +13,18 @@ import {
   Bell,
   SignOut,
   User,
-  GearSix,
   PaperPlaneTilt,
   Plus,
   ChatCircle,
-  Clock,
-  Trash,
   DotsThree,
   Sparkle,
-  ArrowRight,
   Copy,
   ThumbsUp,
   ThumbsDown,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
+import { UserDropdown } from "@/components/ui/UserDropdown";
 
 // =============================================================================
 // Types
@@ -50,6 +48,78 @@ interface ChatMessage {
   role: "USER" | "ASSISTANT";
   content: { text: string };
   created_at: string;
+  isTyping?: boolean;
+}
+
+// =============================================================================
+// Typing Effect Hook
+// =============================================================================
+
+function useTypingEffect(text: string, isTyping: boolean, onComplete?: () => void) {
+  const [displayedText, setDisplayedText] = useState("");
+  const [isComplete, setIsComplete] = useState(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    if (!isTyping) {
+      setDisplayedText(text);
+      setIsComplete(true);
+      return;
+    }
+
+    setDisplayedText("");
+    setIsComplete(false);
+    let index = 0;
+
+    const typeChar = () => {
+      if (index < text.length) {
+        setDisplayedText(text.slice(0, index + 1));
+        index++;
+
+        // Variable speed: faster for spaces/punctuation, slower for new words
+        const char = text[index - 1];
+        const nextChar = text[index] || "";
+        let delay = 15 + Math.random() * 25; // Base 15-40ms
+
+        if (char === " " && /[A-Z]/.test(nextChar)) {
+          delay = 80 + Math.random() * 120; // Pause before new sentence
+        } else if (char === "\n") {
+          delay = 100 + Math.random() * 150; // Pause at line breaks
+        } else if (/[.,!?;:]/.test(char)) {
+          delay = 60 + Math.random() * 80; // Pause at punctuation
+        } else if (char === " ") {
+          delay = 20 + Math.random() * 30; // Quick for spaces
+        }
+
+        setTimeout(typeChar, delay);
+      } else {
+        setIsComplete(true);
+        onCompleteRef.current?.();
+      }
+    };
+
+    // Start with a small delay
+    setTimeout(typeChar, 300);
+
+    return () => {
+      index = text.length; // Stop typing on cleanup
+    };
+  }, [text, isTyping]);
+
+  return { displayedText, isComplete };
+}
+
+// =============================================================================
+// Typing Cursor Component (like MS Word)
+// =============================================================================
+
+function TypingCursor({ visible }: { visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <span className="inline-block w-0.5 h-4 bg-[#4A7DC4] ml-0.5 animate-pulse"
+          style={{ animation: "blink 0.8s step-end infinite" }} />
+  );
 }
 
 // =============================================================================
@@ -67,42 +137,14 @@ function NotificationPanel() {
   );
 }
 
-function UserDropdown({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 transition-colors">
-        <span className="text-white/80 text-sm">{user?.display_name || user?.email?.split("@")[0] || "User"}</span>
-        <div className="w-8 h-8 rounded bg-white/20 text-white flex items-center justify-center text-sm font-medium">
-          {(user?.display_name?.[0] || user?.email?.[0] || "U").toUpperCase()}
-        </div>
-      </button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <div className="text-sm font-semibold text-gray-900">{user?.display_name || "User"}</div>
-              <div className="text-xs text-gray-500 truncate">{user?.email}</div>
-            </div>
-            <div className="py-1.5">
-              <Link href="/profile" className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50" onClick={() => setIsOpen(false)}>
-                <User size={16} className="text-gray-400" /> My Profile
-              </Link>
-              <button onClick={() => { setIsOpen(false); onLogout(); }} className="flex items-center gap-3 px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 w-full">
-                <SignOut size={16} /> Sign out
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
+// UserDropdown imported from shared component
 
 function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
   return (
-    <header className="h-14 bg-[#354A5F] flex items-center justify-between px-6 flex-shrink-0">
+    <header
+      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
+    >
       <LogoWithName variant="white" size="md" />
       <div className="flex items-center gap-2">
         <NotificationPanel />
@@ -149,7 +191,6 @@ function Sidebar({ currentPath = "/chat" }: { currentPath?: string }) {
                 <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}>
                   <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
-                  
                 </Link>
               ))}
             </div>
@@ -186,12 +227,116 @@ function SessionItem({ session, isActive, onClick }: { session: ChatSession; isA
   );
 }
 
-function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: () => void }) {
+// Format message content with basic markdown-like formatting
+function formatMessageContent(text: string) {
+  // Split into paragraphs
+  const paragraphs = text.split(/\n\n+/);
+
+  return paragraphs.map((para, i) => {
+    // Check if it's a table (contains | characters)
+    if (para.includes("|") && para.split("\n").length > 1) {
+      const lines = para.split("\n").filter(l => l.trim());
+      const rows = lines.map(line =>
+        line.split("|").map(cell => cell.trim()).filter(cell => cell && !cell.match(/^-+$/))
+      ).filter(row => row.length > 0);
+
+      if (rows.length > 1) {
+        return (
+          <div key={i} className="overflow-x-auto my-3">
+            <table className="min-w-full text-[13px] border-collapse">
+              <thead>
+                <tr className="border-b border-gray-300">
+                  {rows[0].map((cell, j) => (
+                    <th key={j} className="text-left py-2 px-3 font-semibold text-gray-700 bg-gray-50">
+                      {cell}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(1).map((row, ri) => (
+                  <tr key={ri} className="border-b border-gray-100 hover:bg-gray-50">
+                    {row.map((cell, ci) => (
+                      <td key={ci} className="py-2 px-3 text-gray-600">
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }
+
+    // Check if it's a list
+    const listMatch = para.match(/^(\d+\.|[-•*])\s/m);
+    if (listMatch) {
+      const items = para.split(/\n/).filter(l => l.trim());
+      const isOrdered = /^\d+\./.test(items[0]);
+
+      const ListTag = isOrdered ? "ol" : "ul";
+      return (
+        <ListTag key={i} className={`my-2 pl-5 ${isOrdered ? "list-decimal" : "list-disc"} text-gray-700`}>
+          {items.map((item, j) => (
+            <li key={j} className="mb-1 text-[14px]">
+              {item.replace(/^(\d+\.|[-•*])\s*/, "")}
+            </li>
+          ))}
+        </ListTag>
+      );
+    }
+
+    // Regular paragraph with inline formatting
+    let formatted = para
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-[13px] font-mono">$1</code>');
+
+    // Handle line breaks within paragraph
+    formatted = formatted.split("\n").join("<br/>");
+
+    return (
+      <p
+        key={i}
+        className="mb-3 text-[14px] leading-relaxed text-gray-700"
+        dangerouslySetInnerHTML={{ __html: formatted }}
+      />
+    );
+  });
+}
+
+function ThinkingIndicator() {
+  return (
+    <div className="flex items-center gap-2 px-4 py-3">
+      <div className="flex gap-1">
+        <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+        <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+        <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+      </div>
+      <span className="text-[13px] text-gray-500">Thinking...</span>
+    </div>
+  );
+}
+
+function MessageBubble({ message, onCopy, isLatest }: {
+  message: ChatMessage;
+  onCopy: () => void;
+  isLatest?: boolean;
+}) {
   const isUser = message.role === "USER";
+  const shouldType = isLatest && !isUser && message.isTyping;
+  const { displayedText, isComplete } = useTypingEffect(
+    message.content.text,
+    shouldType || false
+  );
+
+  const textToShow = shouldType ? displayedText : message.content.text;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
-      <div className={`max-w-[70%] ${isUser ? "order-2" : "order-1"}`}>
+      <div className={`max-w-[75%] ${isUser ? "order-2" : "order-1"}`}>
         {!isUser && (
           <div className="flex items-center gap-2 mb-1">
             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center">
@@ -204,20 +349,27 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: () =
           className={`px-4 py-3 rounded-2xl ${
             isUser
               ? "bg-[#4A7DC4] text-white rounded-tr-sm"
-              : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm"
+              : "bg-white border border-gray-200 rounded-tl-sm shadow-sm"
           }`}
         >
-          <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{message.content.text}</p>
+          {isUser ? (
+            <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{message.content.text}</p>
+          ) : (
+            <div className="prose prose-sm max-w-none">
+              {formatMessageContent(textToShow)}
+              {shouldType && !isComplete && <TypingCursor visible={true} />}
+            </div>
+          )}
         </div>
-        {!isUser && (
+        {!isUser && isComplete && (
           <div className="flex items-center gap-1 mt-1.5 pl-1">
-            <button onClick={onCopy} className="p-1 text-gray-400 hover:text-gray-600 rounded">
+            <button onClick={onCopy} className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors" title="Copy">
               <Copy size={14} />
             </button>
-            <button className="p-1 text-gray-400 hover:text-emerald-600 rounded">
+            <button className="p-1 text-gray-400 hover:text-emerald-600 rounded transition-colors" title="Helpful">
               <ThumbsUp size={14} />
             </button>
-            <button className="p-1 text-gray-400 hover:text-red-500 rounded">
+            <button className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors" title="Not helpful">
               <ThumbsDown size={14} />
             </button>
           </div>
@@ -264,7 +416,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [streaming, setStreaming] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -273,7 +425,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isThinking]);
 
   useEffect(() => {
     const token = sessionStorage.getItem("access_token");
@@ -286,7 +438,6 @@ export default function ChatPage() {
       try {
         const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-        // Fetch user
         const userRes = await fetch(`/api/v1/users/me`, {
           headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
         });
@@ -297,9 +448,6 @@ export default function ChatPage() {
           router.push("/login");
           return;
         }
-
-        // Note: Sessions endpoint would be fetched here if available
-        // For now we'll create sessions on-demand
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {
@@ -308,7 +456,8 @@ export default function ChatPage() {
     };
 
     fetchData();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem("access_token");
@@ -369,12 +518,12 @@ export default function ChatPage() {
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setSending(true);
+    setIsThinking(true);
 
     try {
       const token = sessionStorage.getItem("access_token");
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-      // Try streaming first
       const res = await fetch(`/api/v1/chat/sessions/${session.id}/messages?stream=true`, {
         method: "POST",
         headers: {
@@ -385,12 +534,12 @@ export default function ChatPage() {
         body: JSON.stringify({ content: { text } }),
       });
 
+      setIsThinking(false);
+
       if (res.ok) {
         const contentType = res.headers.get("content-type");
 
         if (contentType?.includes("text/event-stream")) {
-          // Handle SSE streaming
-          setStreaming(true);
           const reader = res.body?.getReader();
           const decoder = new TextDecoder();
           let assistantText = "";
@@ -400,6 +549,7 @@ export default function ChatPage() {
             role: "ASSISTANT",
             content: { text: "" },
             created_at: new Date().toISOString(),
+            isTyping: true,
           };
           setMessages(prev => [...prev, assistantMessage]);
 
@@ -421,25 +571,45 @@ export default function ChatPage() {
                   if (lastMsg.role === "ASSISTANT") {
                     lastMsg.content.text = assistantText;
                   }
-                  return updated;
+                  return [...updated];
                 });
               }
             }
           }
-          setStreaming(false);
+
+          // Mark typing as complete
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === "ASSISTANT") {
+              lastMsg.isTyping = false;
+            }
+            return [...updated];
+          });
         } else {
-          // Handle regular JSON response
           const data = await res.json();
           const assistantMessage: ChatMessage = {
             id: (Date.now() + 1).toString(),
             role: "ASSISTANT",
             content: { text: data.content || data.text || "I received your message." },
             created_at: new Date().toISOString(),
+            isTyping: true,
           };
           setMessages(prev => [...prev, assistantMessage]);
+
+          // Mark as done after a delay (let typing effect run)
+          setTimeout(() => {
+            setMessages(prev => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg.role === "ASSISTANT") {
+                lastMsg.isTyping = false;
+              }
+              return [...updated];
+            });
+          }, 100);
         }
       } else {
-        // Handle error
         const errorMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: "ASSISTANT",
@@ -450,6 +620,7 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error("Failed to send message:", error);
+      setIsThinking(false);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "ASSISTANT",
@@ -472,18 +643,18 @@ export default function ChatPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex items-center gap-3 text-gray-500">
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-[#4A7DC4] rounded-full animate-spin" />
-          <span className="text-[14px]">Loading...</span>
-        </div>
-      </div>
-    );
+    return <BrandedLoading context="chat" />;
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+
       <ShellHeader user={user} onLogout={handleLogout} />
 
       <div className="flex flex-1 overflow-hidden">
@@ -515,7 +686,6 @@ export default function ChatPage() {
                     isActive={currentSession?.id === session.id}
                     onClick={() => {
                       setCurrentSession(session);
-                      // Load messages for session
                     }}
                   />
                 ))}
@@ -537,10 +707,14 @@ export default function ChatPage() {
                 <p className="text-[11px] text-gray-500">Your intelligent trade assistant</p>
               </div>
             </div>
-            {streaming && (
+            {(sending || isThinking) && (
               <div className="flex items-center gap-2 text-[12px] text-[#4A7DC4]">
-                <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-pulse" />
-                Typing...
+                <div className="flex gap-0.5">
+                  <div className="w-1.5 h-1.5 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <div className="w-1.5 h-1.5 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <div className="w-1.5 h-1.5 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+                {isThinking ? "Thinking..." : "Responding..."}
               </div>
             )}
           </div>
@@ -560,13 +734,15 @@ export default function ChatPage() {
               </div>
             ) : (
               <div className="max-w-3xl mx-auto">
-                {messages.map((msg) => (
+                {messages.map((msg, index) => (
                   <MessageBubble
                     key={msg.id}
                     message={msg}
                     onCopy={() => handleCopy(msg.content.text)}
+                    isLatest={index === messages.length - 1}
                   />
                 ))}
+                {isThinking && <ThinkingIndicator />}
                 <div ref={messagesEndRef} />
               </div>
             )}

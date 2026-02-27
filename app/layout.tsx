@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { MsalProvider } from "@/lib/auth/MsalProvider";
+import { PreviewBanner } from "@/components/ui/PreviewBanner";
 
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={ibmPlexSans.className} suppressHydrationWarning>
+        <PreviewBanner />
         <MsalProvider>{children}</MsalProvider>
       </body>
     </html>

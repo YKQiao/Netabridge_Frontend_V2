@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
   Robot,
@@ -11,37 +12,22 @@ import {
   MagnifyingGlass,
   Bell,
   SignOut,
-  CaretRight,
   User,
-  Shield,
-  Devices,
-  Buildings,
-  Question,
   GearSix,
-  BellRinging,
-  ArrowsLeftRight,
-  UserSwitch,
-  UserCirclePlus,
   ChatText,
-  Circle,
-  Handshake,
   DotsThree,
-  PaperPlaneTilt,
   Check,
   X,
-  Funnel,
-  MagnifyingGlass as SearchIcon,
-  GridFour,
-  ListBullets,
-  Graph,
   EnvelopeSimple,
-  Phone,
-  LinkedinLogo,
   Plus,
+  Eye,
+  EyeSlash,
+  SquaresFour,
+  List,
+  Warning,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
-import { api } from "@/lib/api";
 
 // =============================================================================
 // Types
@@ -60,7 +46,6 @@ interface Connection {
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "BLOCKED";
   created_at: string;
   updated_at: string;
-  // Enriched fields from API
   user?: {
     id: string;
     email: string;
@@ -68,23 +53,19 @@ interface Connection {
   };
 }
 
-type ViewMode = "table" | "grid" | "graph";
+type ViewMode = "table" | "grid";
 type StatusFilter = "all" | "PENDING" | "ACCEPTED";
 
 // =============================================================================
-// Shared Components (from dashboard)
+// Shared Components
 // =============================================================================
 
 function NotificationPanel() {
-  const [isOpen, setIsOpen] = useState(false);
   const unreadCount = 2;
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors relative"
-      >
+      <button className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors relative">
         <Bell size={18} weight="regular" />
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
@@ -144,7 +125,10 @@ function UserDropdown({ user, onLogout }: { user: UserType | null; onLogout: () 
 
 function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
   return (
-    <header className="h-14 bg-[#354A5F] flex items-center justify-between px-6 flex-shrink-0">
+    <header
+      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
+    >
       <LogoWithName variant="white" size="md" />
       <div className="flex items-center gap-2">
         <NotificationPanel />
@@ -371,21 +355,42 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
   );
 }
 
-function InviteModal({ isOpen, onClose, onInvite }: {
+function InviteModal({ isOpen, onClose, onInvite, userEmail }: {
   isOpen: boolean;
   onClose: () => void;
-  onInvite: (email: string) => void;
+  onInvite: (email: string) => Promise<{ success: boolean; error?: string }>;
+  userEmail: string;
 }) {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+
+    // Client-side self-invite prevention
+    if (email.toLowerCase() === userEmail.toLowerCase()) {
+      setError("You cannot invite yourself");
+      return;
+    }
+
+    setError("");
     setSending(true);
-    await onInvite(email);
+    const result = await onInvite(email);
     setSending(false);
+
+    if (result.success) {
+      setEmail("");
+      onClose();
+    } else {
+      setError(result.error || "Failed to send invite");
+    }
+  };
+
+  const handleClose = () => {
     setEmail("");
+    setError("");
     onClose();
   };
 
@@ -393,14 +398,22 @@ function InviteModal({ isOpen, onClose, onInvite }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[18px] font-semibold text-gray-900">Invite Connection</h2>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+          <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2 text-[13px] text-red-700">
+            <Warning size={16} weight="fill" />
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-[13px] font-medium text-gray-700 mb-1">
@@ -409,7 +422,10 @@ function InviteModal({ isOpen, onClose, onInvite }: {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError("");
+              }}
               placeholder="colleague@company.com"
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
               required
@@ -421,7 +437,7 @@ function InviteModal({ isOpen, onClose, onInvite }: {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50 transition-colors"
             >
               Cancel
@@ -453,6 +469,7 @@ export default function ConnectionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showStats, setShowStats] = useState(true);
 
   useEffect(() => {
     const token = sessionStorage.getItem("access_token");
@@ -493,7 +510,8 @@ export default function ConnectionsPage() {
     };
 
     fetchData();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem("access_token");
@@ -501,7 +519,7 @@ export default function ConnectionsPage() {
     router.push("/login");
   };
 
-  const handleInvite = async (email: string) => {
+  const handleInvite = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const token = sessionStorage.getItem("access_token");
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
@@ -524,9 +542,14 @@ export default function ConnectionsPage() {
         if (connRes.ok) {
           setConnections(await connRes.json());
         }
+        return { success: true };
+      } else {
+        const data = await res.json().catch(() => ({}));
+        return { success: false, error: data.detail || "Failed to send invite" };
       }
     } catch (error) {
       console.error("Failed to send invite:", error);
+      return { success: false, error: "Network error. Please try again." };
     }
   };
 
@@ -592,18 +615,21 @@ export default function ConnectionsPage() {
     return true;
   });
 
+  // Stats
   const pendingCount = connections.filter(c => c.status === "PENDING").length;
   const acceptedCount = connections.filter(c => c.status === "ACCEPTED").length;
 
+  // Calculate "new this month" from actual data
+  const thisMonth = new Date();
+  thisMonth.setDate(1);
+  thisMonth.setHours(0, 0, 0, 0);
+  const newThisMonth = connections.filter(c => {
+    const created = new Date(c.created_at);
+    return c.status === "ACCEPTED" && created >= thisMonth;
+  }).length;
+
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex items-center gap-3 text-gray-500">
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-[#4A7DC4] rounded-full animate-spin" />
-          <span className="text-[14px]">Loading...</span>
-        </div>
-      </div>
-    );
+    return <BrandedLoading context="connections" />;
   }
 
   return (
@@ -632,69 +658,95 @@ export default function ConnectionsPage() {
               </button>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-white border border-gray-200 rounded-md p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Connections</div>
-                <div className="text-[24px] font-semibold text-gray-900">{acceptedCount}</div>
+            {/* Stats - Collapsible */}
+            {showStats && (
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-md p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Connections</div>
+                  <div className="text-[24px] font-semibold text-gray-900">{acceptedCount}</div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-md p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Pending Requests</div>
+                  <div className="text-[24px] font-semibold text-amber-600">{pendingCount}</div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-md p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">New This Month</div>
+                  <div className="text-[24px] font-semibold text-emerald-600">+{newThisMonth}</div>
+                </div>
               </div>
-              <div className="bg-white border border-gray-200 rounded-md p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Pending Requests</div>
-                <div className="text-[24px] font-semibold text-amber-600">{pendingCount}</div>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-md p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">This Month</div>
-                <div className="text-[24px] font-semibold text-emerald-600">+3</div>
-              </div>
-            </div>
+            )}
 
-            {/* Toolbar */}
-            <div className="bg-white border border-gray-200 rounded-t-md px-4 py-3 flex items-center justify-between">
+            {/* Toolbar - Search left, filters and controls right */}
+            <div className="flex items-center justify-between gap-4 mb-6">
+              {/* Left: Search */}
+              <div className="relative w-80">
+                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search connections..."
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                />
+              </div>
+
+              {/* Right: Filters, View, Stats Toggle */}
               <div className="flex items-center gap-3">
-                {/* Search */}
-                <div className="relative">
-                  <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search connections..."
-                    className="pl-9 pr-3 py-1.5 border border-gray-200 rounded text-[13px] w-64 focus:outline-none focus:border-[#4A7DC4]"
-                  />
+                {/* Status Filter */}
+                <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "ACCEPTED", label: "Connected" },
+                    { key: "PENDING", label: "Pending" },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => setStatusFilter(f.key as StatusFilter)}
+                      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors ${
+                        statusFilter === f.key
+                          ? "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Status Filter */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                  className="px-3 py-1.5 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]"
-                >
-                  <option value="all">All Status</option>
-                  <option value="ACCEPTED">Connected</option>
-                  <option value="PENDING">Pending</option>
-                </select>
-              </div>
+                <div className="w-px h-6 bg-gray-200" />
 
-              {/* View Toggle */}
-              <div className="flex items-center gap-1 bg-gray-100 rounded p-0.5">
+                {/* View toggle */}
+                <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                  <button
+                    onClick={() => setViewMode("table")}
+                    className={`p-1.5 rounded transition-colors ${viewMode === "table" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    title="Table view"
+                  >
+                    <List size={16} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    title="Grid view"
+                  >
+                    <SquaresFour size={16} />
+                  </button>
+                </div>
+
+                {/* Stats toggle */}
                 <button
-                  onClick={() => setViewMode("table")}
-                  className={`p-1.5 rounded ${viewMode === "table" ? "bg-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  onClick={() => setShowStats(!showStats)}
+                  className={`p-2 rounded-md transition-colors ${showStats ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
+                  title={showStats ? "Hide stats" : "Show stats"}
                 >
-                  <ListBullets size={18} />
-                </button>
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-1.5 rounded ${viewMode === "grid" ? "bg-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                >
-                  <GridFour size={18} />
+                  {showStats ? <EyeSlash size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
             {/* Content */}
             {viewMode === "table" ? (
-              <div className="bg-white border border-t-0 border-gray-200 rounded-b-md overflow-hidden">
+              <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
@@ -727,9 +779,9 @@ export default function ConnectionsPage() {
                 </table>
               </div>
             ) : (
-              <div className="bg-white border border-t-0 border-gray-200 rounded-b-md p-4">
+              <>
                 {filteredConnections.length === 0 ? (
-                  <div className="py-12 text-center text-gray-500">
+                  <div className="bg-white border border-gray-200 rounded-md py-12 text-center text-gray-500">
                     <UsersThree size={40} className="mx-auto mb-3 text-gray-300" />
                     <p className="text-[14px]">No connections found</p>
                     <p className="text-[13px] text-gray-400 mt-1">Invite colleagues to build your network</p>
@@ -746,7 +798,7 @@ export default function ConnectionsPage() {
                     ))}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </main>
@@ -756,6 +808,7 @@ export default function ConnectionsPage() {
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onInvite={handleInvite}
+        userEmail={user?.email || ""}
       />
     </div>
   );

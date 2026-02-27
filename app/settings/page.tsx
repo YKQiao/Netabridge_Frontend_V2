@@ -453,7 +453,8 @@ export default function SettingsProfilePage() {
     };
 
     fetchUser();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Track changes
   const updateField = useCallback(

@@ -9,6 +9,8 @@ import {
 } from "@azure/msal-browser";
 import { MsalProvider as MsalReactProvider } from "@azure/msal-react";
 import { msalConfig } from "./msalConfig";
+import { BrandedLoading } from "@/components/ui/BrandedLoading";
+import { isPreviewMode, initDemoSession } from "./previewMode";
 
 // Create MSAL instance (singleton)
 const msalInstance = new PublicClientApplication(msalConfig);
@@ -55,6 +57,11 @@ async function initializeMsal(): Promise<void> {
         });
 
         isInitialized = true;
+
+        // NOTE: handleRedirectPromise() is called by the login page
+        // to handle token storage and user sync. Don't call it here
+        // to avoid race conditions.
+
       } catch (error) {
         console.error("[Auth] MSAL initialization failed:", error);
         initializationPromise = null;
@@ -105,6 +112,13 @@ export function MsalProvider({ children }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // In preview mode, skip MSAL and use demo session
+    if (isPreviewMode) {
+      console.log("[Auth] Preview mode enabled - using demo session");
+      initDemoSession();
+      return;
+    }
+
     // Initialize MSAL in background - doesn't block render
     initializeMsal().catch((err) => {
       console.error("[Auth] Init error:", err);
@@ -135,6 +149,11 @@ export function MsalProvider({ children }: Props) {
         </div>
       </div>
     );
+  }
+
+  // In preview mode, render children directly (no MSAL needed)
+  if (isPreviewMode) {
+    return <>{children}</>;
   }
 
   // Render immediately - MSAL initializes in background

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
   Robot,
@@ -118,7 +119,10 @@ function UserDropdown({ user, onLogout }: { user: UserType | null; onLogout: () 
 
 function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
   return (
-    <header className="h-14 bg-[#354A5F] flex items-center justify-between px-6 flex-shrink-0">
+    <header
+      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
+    >
       <LogoWithName variant="white" size="md" />
       <div className="flex items-center gap-2">
         <NotificationPanel />
@@ -405,7 +409,8 @@ export default function DiscoverPage() {
     };
 
     fetchUser();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem("access_token");
@@ -434,14 +439,7 @@ export default function DiscoverPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex items-center gap-3 text-gray-500">
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-[#4A7DC4] rounded-full animate-spin" />
-          <span className="text-[14px]">Loading...</span>
-        </div>
-      </div>
-    );
+    return <BrandedLoading context="discover" />;
   }
 
   return (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
   Robot,
@@ -12,17 +13,21 @@ import {
   Bell,
   SignOut,
   User,
-  GearSix,
   Plus,
   Pencil,
   Trash,
-  Eye,
   Clock,
   CalendarBlank,
   CurrencyDollar,
   X,
   ChatText,
-  Check,
+  SquaresFour,
+  List,
+  Eye,
+  EyeSlash,
+  CaretUp,
+  CaretDown,
+  Funnel,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
@@ -99,7 +104,10 @@ function UserDropdown({ user, onLogout }: { user: UserType | null; onLogout: () 
 
 function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
   return (
-    <header className="h-14 bg-[#354A5F] flex items-center justify-between px-6 flex-shrink-0">
+    <header
+      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
+    >
       <LogoWithName variant="white" size="md" />
       <div className="flex items-center gap-2">
         <NotificationPanel />
@@ -176,13 +184,14 @@ function StatusBadge({ status }: { status: BuyPost["status"] }) {
   );
 }
 
-function BuyPostCard({ post, onEdit, onDelete, onRespond }: {
+function BuyPostCard({ post, onEdit, onDelete, onRespond, currentUserId }: {
   post: BuyPost;
   onEdit: () => void;
   onDelete: () => void;
   onRespond: () => void;
+  currentUserId?: string;
 }) {
-  const isOwner = true; // In production, check against current user
+  const isOwner = currentUserId && post.owner_id === currentUserId;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow">
@@ -232,6 +241,58 @@ function BuyPostCard({ post, onEdit, onDelete, onRespond }: {
           <ChatText size={16} />
           Respond to Request
         </button>
+      )}
+    </div>
+  );
+}
+
+function BuyPostListItem({ post, onEdit, onDelete, onRespond, currentUserId }: {
+  post: BuyPost;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRespond: () => void;
+  currentUserId?: string;
+}) {
+  const isOwner = currentUserId && post.owner_id === currentUserId;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg px-5 py-4 hover:shadow-md transition-shadow flex items-center gap-4">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-3 mb-1">
+          <h3 className="text-[14px] font-semibold text-gray-900 truncate">{post.title}</h3>
+          <StatusBadge status={post.status} />
+        </div>
+        <p className="text-[13px] text-gray-500 truncate">{post.description}</p>
+      </div>
+
+      <div className="flex items-center gap-6 text-[12px] text-gray-500 flex-shrink-0">
+        {post.budget_range && (
+          <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
+            <CurrencyDollar size={14} />
+            {post.budget_range}
+          </span>
+        )}
+        {post.deadline && (
+          <span className="flex items-center gap-1.5">
+            <CalendarBlank size={14} />
+            {new Date(post.deadline).toLocaleDateString()}
+          </span>
+        )}
+        <span className="flex items-center gap-1.5 w-24">
+          <Clock size={14} />
+          {new Date(post.created_at).toLocaleDateString()}
+        </span>
+      </div>
+
+      {isOwner && (
+        <div className="flex gap-1 flex-shrink-0">
+          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors">
+            <Pencil size={16} />
+          </button>
+          <button onClick={onDelete} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
+            <Trash size={16} />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -349,6 +410,10 @@ export default function BuyRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filter, setFilter] = useState<"all" | "mine" | "network">("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showStats, setShowStats] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "deadline">("newest");
 
   useEffect(() => {
     const token = sessionStorage.getItem("access_token");
@@ -389,7 +454,8 @@ export default function BuyRequestsPage() {
     };
 
     fetchData();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem("access_token");
@@ -421,17 +487,48 @@ export default function BuyRequestsPage() {
     }
   };
 
+  // Computed stats
   const openCount = buyPosts.filter(p => p.status === "OPEN").length;
+  const closedCount = buyPosts.filter(p => p.status === "CLOSED").length;
+  const fulfilledCount = buyPosts.filter(p => p.status === "FULFILLED").length;
+
+  // Count requests with upcoming deadlines (within 7 days)
+  const urgentCount = buyPosts.filter(p => {
+    if (!p.deadline || p.status !== "OPEN") return false;
+    const deadline = new Date(p.deadline);
+    const now = new Date();
+    const diffDays = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 7;
+  }).length;
+
+  // Filter and sort posts
+  const filteredPosts = buyPosts
+    .filter(post => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return post.title.toLowerCase().includes(query) ||
+               post.description.toLowerCase().includes(query);
+      }
+      return true;
+    })
+    .filter(post => {
+      if (filter === "mine") return post.owner_id === user?.id;
+      if (filter === "network") return post.owner_id !== user?.id;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sortBy === "deadline") {
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      }
+      return 0;
+    });
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex items-center gap-3 text-gray-500">
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-[#4A7DC4] rounded-full animate-spin" />
-          <span className="text-[14px]">Loading...</span>
-        </div>
-      </div>
-    );
+    return <BrandedLoading />;
   }
 
   return (
@@ -460,67 +557,149 @@ export default function BuyRequestsPage() {
               </button>
             </div>
 
-            {/* Filters */}
-            <div className="flex gap-2 mb-6">
-              {[
-                { key: "all", label: "All Requests" },
-                { key: "mine", label: "My Requests" },
-                { key: "network", label: "From Network" },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key as any)}
-                  className={`px-4 py-2 text-[13px] font-medium rounded-md transition-colors ${
-                    filter === f.key
-                      ? "bg-[#4A7DC4] text-white"
-                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
+            {/* Stats - Collapsible */}
+            {showStats && (
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-md p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Requests</div>
+                  <div className="text-[24px] font-semibold text-gray-900">{buyPosts.length}</div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-md p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Open</div>
+                  <div className="text-[24px] font-semibold text-emerald-600">{openCount}</div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-md p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Fulfilled</div>
+                  <div className="text-[24px] font-semibold text-blue-600">{fulfilledCount}</div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-md p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Urgent (7 days)</div>
+                  <div className="text-[24px] font-semibold text-amber-600">{urgentCount}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Toolbar - Search left, filters and controls right */}
+            <div className="flex items-center justify-between gap-4 mb-6">
+              {/* Left: Search */}
+              <div className="relative w-80">
+                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search requests..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                />
+              </div>
+
+              {/* Right: Filters, Sort, View, Stats Toggle */}
+              <div className="flex items-center gap-3">
+                {/* Filter buttons */}
+                <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "mine", label: "Mine" },
+                    { key: "network", label: "Network" },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => setFilter(f.key as any)}
+                      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors ${
+                        filter === f.key
+                          ? "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="w-px h-6 bg-gray-200" />
+
+                {/* Sort */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="px-3 py-1.5 border border-gray-200 rounded-md text-[12px] bg-white focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20"
                 >
-                  {f.label}
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="deadline">By Deadline</option>
+                </select>
+
+                <div className="w-px h-6 bg-gray-200" />
+
+                {/* View toggle */}
+                <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    title="Grid view"
+                  >
+                    <SquaresFour size={16} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`p-1.5 rounded transition-colors ${viewMode === "list" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    title="List view"
+                  >
+                    <List size={16} />
+                  </button>
+                </div>
+
+                {/* Stats toggle */}
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className={`p-2 rounded-md transition-colors ${showStats ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
+                  title={showStats ? "Hide stats" : "Show stats"}
+                >
+                  {showStats ? <EyeSlash size={16} /> : <Eye size={16} />}
                 </button>
-              ))}
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="bg-white border border-gray-200 rounded-md p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Requests</div>
-                <div className="text-[24px] font-semibold text-gray-900">{buyPosts.length}</div>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-md p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Open</div>
-                <div className="text-[24px] font-semibold text-emerald-600">{openCount}</div>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-md p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Fulfilled</div>
-                <div className="text-[24px] font-semibold text-blue-600">{buyPosts.filter(p => p.status === "FULFILLED").length}</div>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-md p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Responses</div>
-                <div className="text-[24px] font-semibold text-[#4A7DC4]">12</div>
               </div>
             </div>
 
-            {/* Posts Grid */}
-            {buyPosts.length === 0 ? (
+            {/* Posts */}
+            {filteredPosts.length === 0 ? (
               <div className="bg-white border border-gray-200 rounded-lg py-16 text-center">
                 <ShoppingCart size={48} className="mx-auto mb-4 text-gray-300" />
-                <h3 className="text-[16px] font-semibold text-gray-900 mb-1">No buy requests yet</h3>
-                <p className="text-[14px] text-gray-500 mb-4">Create a request to find suppliers for what you need</p>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors inline-flex items-center gap-2"
-                >
-                  <Plus size={18} weight="bold" />
-                  Create Your First Request
-                </button>
+                <h3 className="text-[16px] font-semibold text-gray-900 mb-1">
+                  {searchQuery ? "No matching requests" : "No buy requests yet"}
+                </h3>
+                <p className="text-[14px] text-gray-500 mb-4">
+                  {searchQuery ? "Try adjusting your search" : "Create a request to find suppliers for what you need"}
+                </p>
+                {!searchQuery && (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors inline-flex items-center gap-2"
+                  >
+                    <Plus size={18} weight="bold" />
+                    Create Your First Request
+                  </button>
+                )}
               </div>
-            ) : (
+            ) : viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {buyPosts.map((post) => (
+                {filteredPosts.map((post) => (
                   <BuyPostCard
                     key={post.id}
                     post={post}
+                    currentUserId={user?.id}
+                    onEdit={() => console.log("Edit:", post.id)}
+                    onDelete={() => console.log("Delete:", post.id)}
+                    onRespond={() => console.log("Respond:", post.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredPosts.map((post) => (
+                  <BuyPostListItem
+                    key={post.id}
+                    post={post}
+                    currentUserId={user?.id}
                     onEdit={() => console.log("Edit:", post.id)}
                     onDelete={() => console.log("Delete:", post.id)}
                     onRespond={() => console.log("Respond:", post.id)}

@@ -35,7 +35,10 @@ export default function SettingsLayout({
   return (
     <div className="min-h-screen bg-[#F7F8FA]">
       {/* Header */}
-      <header className="h-14 bg-[#354A5F] flex items-center px-6">
+      <header
+        className="h-14 flex items-center px-6"
+        style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
+      >
         <Link href="/dashboard" className="flex items-center gap-2 text-white/70 hover:text-white transition-colors">
           <CaretLeft size={18} weight="bold" />
           <Logo variant="white" size={32} className="-mr-1" />
