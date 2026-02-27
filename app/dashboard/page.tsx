@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import { isPreviewMode, DEMO_USER } from "@/lib/auth/previewMode";
 import {
@@ -41,11 +40,6 @@ import {
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
 import { clearAuth } from "@/lib/auth/AuthProvider";
-
-// Dynamically import HeaderParticles with SSR disabled
-const HeaderParticles = dynamic(() => import("@/components/HeaderParticles"), {
-  ssr: false,
-});
 
 // =============================================================================
 // Types
@@ -423,19 +417,14 @@ function UserDropdown({ user, onLogout }: { user: User | null; onLogout: () => v
 function ShellHeader({ user, onLogout }: { user: User | null; onLogout: () => void }) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0 relative overflow-hidden"
+      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      {/* Particle Background */}
-      <HeaderParticles className="absolute inset-0 z-0" />
-
       {/* Logo Lockup */}
-      <div className="relative z-10">
-        <LogoWithName variant="white" size="md" />
-      </div>
+      <LogoWithName variant="white" size="md" />
 
       {/* Actions */}
-      <div className="flex items-center gap-2 relative z-10">
+      <div className="flex items-center gap-2">
         <NotificationPanel />
         <div className="w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
@@ -727,45 +716,35 @@ export default function DashboardPage() {
       return;
     }
 
-    const fetchUser = async () => {
-      try {
-        // Use relative URL to leverage Next.js proxy (bypasses CORS)
-        const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+    // INSTANT: Decode JWT synchronously to show dashboard immediately
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const email = payload.email || payload.sub || "user@example.com";
+      setUser({
+        id: payload.oid || payload.sub || "unknown",
+        display_name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        email: email,
+      });
+      setLoading(false); // Show dashboard IMMEDIATELY
+    } catch {
+      // Token decode failed - clear and redirect
+      sessionStorage.removeItem("access_token");
+      router.push("/login");
+      return;
+    }
 
-        const response = await fetch(`/api/v1/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-API-Key": API_KEY,
-          },
-        });
+    // BACKGROUND: Fetch full user data (updates silently, no loading spinner)
+    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+    fetch(`/api/v1/users/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-API-Key": API_KEY,
+      },
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => data && setUser(data))
+      .catch(() => {}); // Silent fail - we already have user from JWT
 
-        if (response.ok) {
-          const data = await response.json();
-          setUser(data);
-        } else if (response.status === 401) {
-          // User not in DB yet - try to extract info from token
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            const email = payload.email || payload.sub || "user@example.com";
-            setUser({
-              id: payload.oid || payload.sub || "unknown",
-              display_name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-              email: email,
-            });
-          } catch {
-            // Token decode failed - clear and redirect
-            sessionStorage.removeItem("access_token");
-            router.push("/login");
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch user:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

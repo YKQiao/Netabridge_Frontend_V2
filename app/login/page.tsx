@@ -17,6 +17,7 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
@@ -59,8 +60,16 @@ function LoginContent() {
     // Check if we're in dev mode
     const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
     setIsDev(!clientId || clientId === "00000000-0000-0000-0000-000000000000");
+
+    // Done checking - show login form
+    setCheckingAuth(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return <BrandedLoading context="auth" />;
+  }
 
   // Microsoft login - redirect to backend OAuth endpoint
   const handleMicrosoftLogin = () => {
