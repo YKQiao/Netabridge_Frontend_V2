@@ -88,7 +88,7 @@ export default function AuthLayout({ children, variant = "login" }: AuthLayoutPr
         <ParticlesBackground className="absolute inset-0 z-0" />
 
         {/* Content */}
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+        <div className="relative z-10 flex flex-col justify-between p-12 w-full pointer-events-none">
           <div className="animate-fade-in-up-slow">
             <LogoWithName variant="white" size="lg" className="mb-16" />
 

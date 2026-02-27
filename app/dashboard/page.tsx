@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import { isPreviewMode, DEMO_USER } from "@/lib/auth/previewMode";
 import {
@@ -40,6 +41,11 @@ import {
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
 import { clearAuth } from "@/lib/auth/AuthProvider";
+
+// Dynamically import HeaderParticles with SSR disabled
+const HeaderParticles = dynamic(() => import("@/components/HeaderParticles"), {
+  ssr: false,
+});
 
 // =============================================================================
 // Types
@@ -417,14 +423,19 @@ function UserDropdown({ user, onLogout }: { user: User | null; onLogout: () => v
 function ShellHeader({ user, onLogout }: { user: User | null; onLogout: () => void }) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 flex items-center justify-between px-6 flex-shrink-0 relative overflow-hidden"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
+      {/* Particle Background */}
+      <HeaderParticles className="absolute inset-0 z-0" />
+
       {/* Logo Lockup */}
-      <LogoWithName variant="white" size="md" />
+      <div className="relative z-10">
+        <LogoWithName variant="white" size="md" />
+      </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 relative z-10">
         <NotificationPanel />
         <div className="w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />

@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { House, ArrowLeft } from "@phosphor-icons/react";
 
-export default function NotFound() {
-  const brandBackground = "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)";
+const ParticlesBackground = dynamic(() => import("@/components/Particles"), {
+  ssr: false,
+});
 
+export default function NotFound() {
   return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ background: brandBackground }}
-    >
-      <div className="text-center px-6">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[var(--brand-500)] to-[var(--brand-600)] relative overflow-hidden">
+      {/* Particle Effects Background */}
+      <ParticlesBackground className="absolute inset-0 z-0" />
+
+      <div className="text-center px-6 relative z-10 pointer-events-none">
         {/* Logo */}
         <div className="mb-8 flex justify-center">
           <Image
@@ -33,7 +36,7 @@ export default function NotFound() {
         </p>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center pointer-events-auto">
           <Link
             href="/dashboard"
             className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#354A5F] font-medium rounded-lg hover:bg-white/90 transition-colors"
