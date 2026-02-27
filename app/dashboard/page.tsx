@@ -740,7 +740,6 @@ export default function DashboardPage() {
               id: payload.oid || payload.sub || "unknown",
               display_name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
               email: email,
-              created_at: new Date().toISOString(),
             });
           } catch {
             // Token decode failed - clear and redirect
