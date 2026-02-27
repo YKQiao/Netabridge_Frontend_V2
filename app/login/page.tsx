@@ -97,7 +97,7 @@ export default function LoginPage() {
               return checkResp.json().catch(() => ({}));
             }
             return {};
-          }).then(checkData => {
+          }).then((checkData: { needs_password_setup?: boolean; account_exists?: boolean; is_linked?: boolean }) => {
             if (checkData.needs_password_setup) {
               sessionStorage.setItem("pending_oauth_token", token);
               sessionStorage.setItem("needs_password_setup", "true");
