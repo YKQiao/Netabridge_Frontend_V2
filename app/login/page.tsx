@@ -67,13 +67,14 @@ function LoginContent() {
     setLoading(true);
     setError("");
 
-    // Get the API base URL
+    // Get the API base URL and key
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY || "";
 
     // Redirect to backend's Microsoft OAuth endpoint
     // Backend will handle MS OAuth and redirect back with token
     const redirectUri = encodeURIComponent(window.location.origin + "/login");
-    window.location.href = `${apiUrl}${AUTH_ENDPOINTS.microsoftLogin}?redirect_uri=${redirectUri}`;
+    window.location.href = `${apiUrl}${AUTH_ENDPOINTS.microsoftLogin}?redirect_uri=${redirectUri}&api_key=${apiKey}`;
   };
 
   // Check if email exists when user finishes typing
@@ -256,17 +257,19 @@ function LoginContent() {
         {/* SSO Buttons */}
         <div className="space-y-3 mb-4 animate-stagger">
           <button
-            onClick={handleMicrosoftLogin}
-            disabled={loading}
-            className="w-full h-10 flex items-center justify-center gap-2 border border-[var(--border-default)] bg-[var(--bg-card)] hover:bg-[var(--gray-100)] disabled:opacity-50 text-[var(--text-primary)] text-sm font-medium rounded-md transition-all btn-click"
+            disabled
+            className="w-full h-10 flex items-center justify-center gap-2 border border-[var(--border-default)] text-[var(--text-muted)] text-sm font-medium rounded-md cursor-not-allowed relative bg-[var(--bg-card)] btn-click"
           >
             <svg className="w-4 h-4" viewBox="0 0 23 23">
-              <path fill="#f35325" d="M1 1h10v10H1z" />
-              <path fill="#81bc06" d="M12 1h10v10H12z" />
-              <path fill="#05a6f0" d="M1 12h10v10H1z" />
-              <path fill="#ffba08" d="M12 12h10v10H12z" />
+              <path fill="#9CA3AF" d="M1 1h10v10H1z" />
+              <path fill="#9CA3AF" d="M12 1h10v10H12z" />
+              <path fill="#9CA3AF" d="M1 12h10v10H1z" />
+              <path fill="#9CA3AF" d="M12 12h10v10H12z" />
             </svg>
             Continue with Microsoft
+            <span className="absolute right-3 text-[10px] bg-[var(--gray-200)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">
+              Soon
+            </span>
           </button>
 
           <button
@@ -321,7 +324,7 @@ function LoginContent() {
               className="w-full h-10 px-3 text-sm border border-[var(--border-default)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
             />
           </div>
-          {(showPasswordField || password) && (
+          {!isDev && (showPasswordField || password) && (
             <div className="animate-fade-in-up">
               <input
                 type="password"
