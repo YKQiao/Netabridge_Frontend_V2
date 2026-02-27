@@ -17,23 +17,33 @@ const msalInstance = new PublicClientApplication(msalConfig);
 let initializationPromise: Promise<void> | null = null;
 let isInitialized = false;
 
-// Initialize MSAL once - optimized for speed
+// Initialize MSAL once
 async function initializeMsal(): Promise<void> {
   if (isInitialized) return;
 
   if (!initializationPromise) {
     initializationPromise = (async () => {
       try {
-        // Fast init - just initialize the instance
         await msalInstance.initialize();
 
-        // Set active account immediately if one exists (sync, fast)
+        // Handle redirect response (must be after initialize, before anything else)
+        try {
+          const response = await msalInstance.handleRedirectPromise();
+          if (response) {
+            msalInstance.setActiveAccount(response.account);
+          }
+        } catch (redirectError) {
+          console.error("[Auth] Redirect handling error:", redirectError);
+          clearStuckAuthState();
+        }
+
+        // Set active account if one exists
         const accounts = msalInstance.getAllAccounts();
         if (accounts.length > 0) {
           msalInstance.setActiveAccount(accounts[0]);
         }
 
-        // Listen for auth events (sync, fast)
+        // Listen for auth events
         msalInstance.addEventCallback((event) => {
           if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
             const payload = event.payload as AuthenticationResult;
@@ -45,22 +55,6 @@ async function initializeMsal(): Promise<void> {
         });
 
         isInitialized = true;
-
-        // Handle redirect response AFTER marking as initialized (non-blocking)
-        // This runs in background - doesn't block the UI
-        msalInstance.handleRedirectPromise()
-          .then((response) => {
-            if (response) {
-              msalInstance.setActiveAccount(response.account);
-              // Trigger re-render by dispatching storage event
-              window.dispatchEvent(new Event('msal:redirectComplete'));
-            }
-          })
-          .catch((redirectError) => {
-            console.error("[Auth] Redirect handling error:", redirectError);
-            clearStuckAuthState();
-          });
-
       } catch (error) {
         console.error("[Auth] MSAL initialization failed:", error);
         initializationPromise = null;
