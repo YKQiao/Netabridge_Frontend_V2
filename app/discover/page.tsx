@@ -129,15 +129,22 @@ function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () =
   );
 }
 
+interface NavItem {
+  icon: React.ReactNode;
+  label: string;
+  href: string;
+  active?: boolean;
+}
+
 function Sidebar({ currentPath = "/discover" }: { currentPath?: string }) {
-  const navSections = [
+  const navSections: { title: string; items: NavItem[] }[] = [
     { title: "Overview", items: [
       { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
       { icon: <Robot size={18} />, label: "AI Assistant", href: "/chat" },
     ]},
     { title: "Trade", items: [
       { icon: <Package size={18} />, label: "My Resources", href: "/resources" },
-      { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests", badge: 3 },
+      { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests" },
     ]},
     { title: "Network", items: [
       { icon: <UsersThree size={18} />, label: "Connections", href: "/connections" },
@@ -158,7 +165,7 @@ function Sidebar({ currentPath = "/discover" }: { currentPath?: string }) {
                 <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}>
                   <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
-                  {item.badge && <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-500 text-white rounded-full">{item.badge}</span>}
+                  
                 </Link>
               ))}
             </div>

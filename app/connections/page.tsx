@@ -155,8 +155,15 @@ function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () =
   );
 }
 
+interface NavItem {
+  icon: React.ReactNode;
+  label: string;
+  href: string;
+  active?: boolean;
+}
+
 function Sidebar({ currentPath = "/connections" }: { currentPath?: string }) {
-  const navSections = [
+  const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: "Overview",
       items: [
@@ -168,7 +175,7 @@ function Sidebar({ currentPath = "/connections" }: { currentPath?: string }) {
       title: "Trade",
       items: [
         { icon: <Package size={18} />, label: "My Resources", href: "/resources" },
-        { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests", badge: 3 },
+        { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests" },
       ],
     },
     {
@@ -199,9 +206,6 @@ function Sidebar({ currentPath = "/connections" }: { currentPath?: string }) {
                 >
                   <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
-                  {item.badge && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-500 text-white rounded-full">{item.badge}</span>
-                  )}
                 </Link>
               ))}
             </div>
