@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { loginRequest } from "@/lib/auth/msalConfig";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { isPreviewMode } from "@/lib/auth/previewMode";
+import { AUTH_ENDPOINTS, setAccessToken, getAccessToken } from "@/lib/auth/AuthProvider";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import AuthLayout from "@/components/AuthLayout";
@@ -14,29 +13,10 @@ const ButtonParticles = dynamic(() => import("@/components/ButtonParticles"), {
   ssr: false,
 });
 
-export default function LoginPage() {
-  const router = useRouter();
-
-  // In preview mode, redirect to dashboard immediately (session already initialized)
-  useEffect(() => {
-    if (isPreviewMode) {
-      router.push("/dashboard");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Show loading while redirecting in preview mode
-  if (isPreviewMode) {
-    return <BrandedLoading context="init" />;
-  }
-
-  return <LoginContent />;
-}
-
 function LoginContent() {
   const router = useRouter();
-  const { instance } = useMsal();
-  const isAuthenticated = useIsAuthenticated();
+  const searchParams = useSearchParams();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
@@ -46,130 +26,54 @@ function LoginContent() {
   const [accountExists, setAccountExists] = useState(false);
   const checkEmailRef = useRef<string>("");
 
-  // Check dev mode and existing token on client only
+  // Handle OAuth callback - check for token in URL params
   useEffect(() => {
-    const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
-    setIsDev(!clientId || clientId === "00000000-0000-0000-0000-000000000000");
-
-    const token = sessionStorage.getItem("access_token");
-    if (token) {
+    // Preview mode - redirect to dashboard
+    if (isPreviewMode) {
       router.push("/dashboard");
       return;
     }
 
-    // Don't auto-silently authenticate - this causes redirect loops
-    // if the backend doesn't recognize the MSAL token.
-    // Let the user explicitly click "Sign in with Microsoft"
+    // Check if we already have a token
+    const existingToken = getAccessToken();
+    if (existingToken) {
+      router.push("/dashboard");
+      return;
+    }
+
+    // Check for token from OAuth callback
+    const token = searchParams.get("token");
+    const authError = searchParams.get("error");
+
+    if (token) {
+      setAccessToken(token);
+      // Clean URL and redirect
+      router.replace("/dashboard");
+      return;
+    }
+
+    if (authError) {
+      setError(decodeURIComponent(authError));
+    }
+
+    // Check if we're in dev mode
+    const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
+    setIsDev(!clientId || clientId === "00000000-0000-0000-0000-000000000000");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleMicrosoftLogin = async () => {
+  // Microsoft login - redirect to backend OAuth endpoint
+  const handleMicrosoftLogin = () => {
     setLoading(true);
     setError("");
 
-    try {
-      await instance.loginRedirect(loginRequest);
-    } catch (err: any) {
-      const errorCode = err?.errorCode || "";
-      console.error("Login redirect failed:", err);
-      setError(
-        errorCode === "interaction_in_progress"
-          ? "A login is already in progress. Please wait."
-          : "Unable to sign in. Please try again."
-      );
-      setLoading(false);
-    }
-  };
+    // Get the API base URL
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
 
-  // Handle successful authentication from MSAL (after redirect)
-  // We listen for the active account being set by MsalProvider
-  useEffect(() => {
-    const account = instance.getActiveAccount();
-    if (account && isAuthenticated) {
-      // User is authenticated via Microsoft
-      setLoading(true);
-
-      const API_BASE = "";
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      // Get token silently since user is already authenticated
-      instance.acquireTokenSilent({
-        ...loginRequest,
-        account: account,
-      }).then((response) => {
-        // Use idToken - backend configured to accept frontend client ID as audience
-        const token = response.idToken;
-
-        // Check if user exists and needs password setup (skip in dev mode)
-        const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
-        const isDevMode = !clientId || clientId === "00000000-0000-0000-0000-000000000000";
-
-        if (!isDevMode) {
-          fetch(`${API_BASE}/api/v1/auth/check-account`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-API-Key": API_KEY,
-            },
-            body: JSON.stringify({
-              email: account.username || "",
-              oauth_provider: "microsoft",
-            }),
-          }).then(checkResp => {
-            if (checkResp.ok) {
-              return checkResp.json().catch(() => ({}));
-            }
-            return {};
-          }).then((checkData: { needs_password_setup?: boolean; account_exists?: boolean; is_linked?: boolean }) => {
-            if (checkData.needs_password_setup) {
-              sessionStorage.setItem("pending_oauth_token", token);
-              sessionStorage.setItem("needs_password_setup", "true");
-              router.push("/set-password");
-              return;
-            }
-
-            if (checkData.account_exists && !checkData.is_linked) {
-              sessionStorage.setItem("pending_oauth_token", token);
-              sessionStorage.setItem("pending_link_email", account.username || "");
-              router.push(`/verify-link?email=${encodeURIComponent(account.username || "")}`);
-              return;
-            }
-
-            // Normal flow - save token and go to dashboard
-            finishLogin(token, account, API_BASE, API_KEY);
-          }).catch(() => {
-            // Endpoint not available, continue with normal flow
-            finishLogin(token, account, API_BASE, API_KEY);
-          });
-        } else {
-          // Dev mode - just finish login
-          finishLogin(token, account, API_BASE, API_KEY);
-        }
-      }).catch((err) => {
-        console.error("Token acquisition error:", err);
-        setLoading(false);
-      });
-    }
-  }, [isAuthenticated, instance, router]);
-
-  // Helper to finish login process
-  const finishLogin = (token: string, account: any, API_BASE: string, API_KEY: string) => {
-    // Sync user with backend
-    fetch(`${API_BASE}/api/v1/auth/sync`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        "X-API-Key": API_KEY,
-      },
-      body: JSON.stringify({
-        email: account.username || "",
-        display_name: account.name || account.username || "",
-      }),
-    }).catch((e) => console.warn("User sync error:", e));
-
-    sessionStorage.setItem("access_token", token);
-    router.push("/dashboard");
+    // Redirect to backend's Microsoft OAuth endpoint
+    // Backend will handle MS OAuth and redirect back with token
+    const redirectUri = encodeURIComponent(window.location.origin + "/login");
+    window.location.href = `${apiUrl}${AUTH_ENDPOINTS.microsoftLogin}?redirect_uri=${redirectUri}`;
   };
 
   // Check if email exists when user finishes typing
@@ -188,10 +92,9 @@ function LoginContent() {
     checkEmailRef.current = currentEmail;
 
     try {
-      const API_BASE = "";
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-      const response = await fetch(`${API_BASE}/api/v1/auth/check-account`, {
+      const response = await fetch(`/api/v1/auth/check-account`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -223,12 +126,11 @@ function LoginContent() {
     setError("");
 
     try {
-      const API_BASE = "";
       const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-      // If password provided, try login (regardless of accountExists - check may have failed)
+      // If password provided, try login
       if (password) {
-        const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+        const response = await fetch(AUTH_ENDPOINTS.login, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -256,7 +158,7 @@ function LoginContent() {
       // Dev mode fallback (no password required)
       if (isDev) {
         const response = await fetch(
-          `${API_BASE}/api/v1/auth/dev/login?email=${encodeURIComponent(email)}`,
+          `${AUTH_ENDPOINTS.devLogin}?email=${encodeURIComponent(email)}`,
           {
             method: "POST",
             headers: { "X-API-Key": API_KEY },
@@ -271,8 +173,9 @@ function LoginContent() {
         sessionStorage.setItem("access_token", data.access_token);
         sessionStorage.setItem("user_oid", data.user_oid);
 
+        // Sync user data
         try {
-          await fetch(`${API_BASE}/api/v1/auth/sync`, {
+          await fetch(AUTH_ENDPOINTS.sync, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -298,12 +201,14 @@ function LoginContent() {
       // Account doesn't exist - redirect to signup
       if (!accountExists) {
         setError("No account found with this email. Please sign up first.");
+        setLoading(false);
         return;
       }
 
       // Account exists but no password entered
       if (!password) {
         setError("Please enter your password");
+        setLoading(false);
         return;
       }
     } catch (err: any) {
@@ -325,8 +230,8 @@ function LoginContent() {
     }
   };
 
-  // Show branded loading when signing in
-  if (loading) {
+  // Show loading for preview mode or OAuth redirect
+  if (isPreviewMode || loading) {
     return <BrandedLoading context="login" />;
   }
 
@@ -477,5 +382,19 @@ function LoginContent() {
         </a>
       </p>
     </AuthLayout>
+  );
+}
+
+// Loading fallback for Suspense
+function LoginLoading() {
+  return <BrandedLoading context="login" />;
+}
+
+// Wrap in Suspense for useSearchParams
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginContent />
+    </Suspense>
   );
 }

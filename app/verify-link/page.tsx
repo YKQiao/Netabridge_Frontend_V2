@@ -2,9 +2,9 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMsal } from "@azure/msal-react";
 import nextDynamic from "next/dynamic";
 import AuthLayout from "@/components/AuthLayout";
+import { clearAuth } from "@/lib/auth/AuthProvider";
 import { Link2, AlertTriangle } from "lucide-react";
 
 const ButtonParticles = nextDynamic(() => import("@/components/ButtonParticles"), {
@@ -14,7 +14,6 @@ const ButtonParticles = nextDynamic(() => import("@/components/ButtonParticles")
 function VerifyLinkContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { instance } = useMsal();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +42,8 @@ function VerifyLinkContent() {
     }
 
     setCheckingAuth(false);
-  }, [searchParams, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleVerifyAndLink = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +107,7 @@ function VerifyLinkContent() {
     // Clear pending OAuth data
     sessionStorage.removeItem("pending_oauth_token");
     sessionStorage.removeItem("pending_link_email");
-    instance.clearCache();
+    clearAuth();
     router.push("/login");
   };
 

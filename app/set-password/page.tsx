@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMsal } from "@azure/msal-react";
 import nextDynamic from "next/dynamic";
 import AuthLayout from "@/components/AuthLayout";
 import { PasswordInput, ConfirmPasswordInput } from "@/components/PasswordInput";
@@ -16,41 +15,42 @@ const ButtonParticles = nextDynamic(() => import("@/components/ButtonParticles")
 function SetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { instance } = useMsal();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
 
   const passwordValidation = validatePassword(password);
   const passwordsMatch = doPasswordsMatch(password, confirmPassword);
 
-  // Get user info from MSAL or query params
+  // Get user info from query params or session storage
   useEffect(() => {
-    const account = instance.getActiveAccount();
-    if (account) {
-      setEmail(account.username || "");
-      setDisplayName(account.name || "");
+    // Check query params first
+    const emailParam = searchParams.get("email");
+    const nameParam = searchParams.get("name");
+
+    if (emailParam) {
+      setEmail(emailParam);
     } else {
-      // Check if we have info in query params (fallback)
-      const emailParam = searchParams.get("email");
-      const nameParam = searchParams.get("name");
-      if (emailParam) setEmail(emailParam);
-      if (nameParam) setDisplayName(nameParam);
+      // Check session storage for pending OAuth flow
+      const pendingEmail = sessionStorage.getItem("pending_link_email");
+      if (pendingEmail) {
+        setEmail(pendingEmail);
+      }
     }
 
-    // If no email at all, redirect to login
+    // If no email and no pending token, redirect to login
     const token = sessionStorage.getItem("pending_oauth_token");
-    if (!token && !instance.getActiveAccount()) {
+    if (!token && !emailParam) {
       router.push("/login");
       return;
     }
 
     setCheckingAuth(false);
-  }, [instance, searchParams, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();

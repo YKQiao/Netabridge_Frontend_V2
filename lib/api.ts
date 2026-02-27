@@ -1,10 +1,9 @@
 /**
- * API Client for IdealRing Backend
+ * API Client for NetaBridge Backend
  * Handles authentication and API calls
  */
 
-import { msalInstance } from "./auth/MsalProvider";
-import { loginRequest } from "./auth/msalConfig";
+import { getAccessToken } from "./auth/AuthProvider";
 
 // Use relative URL to leverage Next.js rewrites (bypasses CORS)
 // Next.js proxies /api/* to the backend defined in next.config.ts
@@ -13,32 +12,13 @@ const API_PREFIX = "/api/v1";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
 /**
- * Get access token from MSAL
- */
-async function getAccessToken(): Promise<string | null> {
-  const account = msalInstance.getActiveAccount();
-  if (!account) return null;
-
-  try {
-    const response = await msalInstance.acquireTokenSilent({
-      ...loginRequest,
-      account,
-    });
-    return response.idToken;
-  } catch (error) {
-    console.error("Failed to get access token:", error);
-    return null;
-  }
-}
-
-/**
  * Make authenticated API request
  */
 async function fetchApi<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = await getAccessToken();
+  const token = getAccessToken();
   const url = `${API_BASE}${API_PREFIX}${path}`;
 
   const headers: Record<string, string> = {

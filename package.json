@@ -9,8 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@azure/msal-browser": "^3.27.0",
-    "@azure/msal-react": "^2.1.1",
     "@phosphor-icons/react": "^2.1.10",
     "@tsparticles/react": "^3.0.0",
     "clsx": "^2.1.1",

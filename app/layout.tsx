@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
-import { MsalProvider } from "@/lib/auth/MsalProvider";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { PreviewBanner } from "@/components/ui/PreviewBanner";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={ibmPlexSans.className} suppressHydrationWarning>
         <PreviewBanner />
-        <MsalProvider>{children}</MsalProvider>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
