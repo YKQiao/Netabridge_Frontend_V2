@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [accountExists, setAccountExists] = useState(false);
   const checkEmailRef = useRef<string>("");
 
-  // Check dev mode, existing token, and try silent auth on client only
+  // Check dev mode and existing token on client only
   useEffect(() => {
     const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
     setIsDev(!clientId || clientId === "00000000-0000-0000-0000-000000000000");
@@ -36,23 +36,10 @@ export default function LoginPage() {
       return;
     }
 
-    // Try silent authentication if user already has an account
-    const accounts = instance.getAllAccounts();
-    if (accounts.length > 0) {
-      setLoading(true);
-      instance.acquireTokenSilent({
-        ...loginRequest,
-        account: accounts[0],
-      }).then((response) => {
-        if (response) {
-          sessionStorage.setItem("access_token", response.idToken);
-          router.push("/dashboard");
-        }
-      }).catch(() => {
-        setLoading(false);
-      });
-    }
-  }, [router, instance]);
+    // Don't auto-silently authenticate - this causes redirect loops
+    // if the backend doesn't recognize the MSAL token.
+    // Let the user explicitly click "Sign in with Microsoft"
+  }, [router]);
 
   const handleMicrosoftLogin = async () => {
     setLoading(true);

@@ -37,6 +37,7 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
+import { msalInstance } from "@/lib/auth/MsalProvider";
 
 // =============================================================================
 // Types
@@ -732,9 +733,19 @@ export default function DashboardPage() {
     fetchUser();
   }, [router]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("user_oid");
+
+    // Clear MSAL accounts to prevent auto-login loop
+    try {
+      msalInstance.setActiveAccount(null);
+      // Clear all MSAL cache (tokens, accounts)
+      await msalInstance.clearCache();
+    } catch (e) {
+      console.warn("Error clearing MSAL cache:", e);
+    }
+
     router.push("/login");
   };
 
