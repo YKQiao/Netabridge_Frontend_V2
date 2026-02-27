@@ -27,7 +27,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isDev, setIsDev] = useState(false);
 
-  // Check dev mode and existing token on client only (avoid hydration mismatch)
+  // Check dev mode, existing token, and try silent auth on client only
   useEffect(() => {
     const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
     setIsDev(!clientId || clientId === "00000000-0000-0000-0000-000000000000");
@@ -35,83 +35,86 @@ export default function LoginPage() {
     const token = sessionStorage.getItem("access_token");
     if (token) {
       router.push("/dashboard");
+      return;
     }
-  }, [router]);
+
+    // Try silent authentication if user already has an account
+    const accounts = instance.getAllAccounts();
+    if (accounts.length > 0) {
+      setLoading(true);
+      instance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+      }).then((response) => {
+        if (response) {
+          sessionStorage.setItem("access_token", response.idToken);
+          router.push("/dashboard");
+        }
+      }).catch(() => {
+        // Silent auth failed, user needs to login interactively
+        setLoading(false);
+      });
+    }
+  }, [router, instance]);
 
   const handleMicrosoftLogin = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await instance.loginPopup(loginRequest);
+      // Use redirect for faster, more reliable login (avoids popup blockers and COOP issues)
+      await instance.loginRedirect(loginRequest);
+      // Note: Page will redirect, so code below won't execute
+    } catch (err: any) {
+      const errorCode = err?.errorCode || "";
+      console.error("Login redirect failed:", err);
+      setError(
+        errorCode === "interaction_in_progress"
+          ? "A login is already in progress. Please wait."
+          : "Unable to sign in. Please try again."
+      );
+      setLoading(false);
+    }
+  };
 
-      if (response.account) {
-        instance.setActiveAccount(response.account);
+  // Handle redirect response (runs after returning from Microsoft login)
+  useEffect(() => {
+    const handleRedirectResponse = async () => {
+      try {
+        const response = await instance.handleRedirectPromise();
+        if (response?.account) {
+          setLoading(true);
+          instance.setActiveAccount(response.account);
 
-        const API_BASE = ""; // Use Next.js proxy
-        const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-        const token = response.idToken;
+          const API_BASE = "";
+          const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+          const token = response.idToken;
 
-        try {
-          const payload = JSON.parse(atob(token.split(".")[1]));
-          console.log("=== ID Token Debug ===");
-          console.log("aud:", payload.aud);
-          console.log("tid:", payload.tid);
-          console.log("oid:", payload.oid);
-        } catch (e) { console.warn("Decode error:", e); }
-
-        try {
-          const syncResp = await fetch(`${API_BASE}/api/v1/auth/sync`, {
+          // Sync user with backend (don't block on this)
+          fetch(`${API_BASE}/api/v1/auth/sync`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${response.idToken}`,
+              Authorization: `Bearer ${token}`,
               "X-API-Key": API_KEY,
             },
             body: JSON.stringify({
               email: response.account.username || "",
               display_name: response.account.name || response.account.username || "",
             }),
-          });
+          }).catch((e) => console.warn("User sync error:", e));
 
-          if (!syncResp.ok) {
-            const errText = await syncResp.text();
-            console.error("=== Sync Failed ===", syncResp.status, errText);
-            setError("Backend rejected: " + errText);
-            setLoading(false);
-            return;
-          }
-        } catch (syncError) {
-          console.warn("User sync network error:", syncError);
+          sessionStorage.setItem("access_token", token);
+          router.push("/dashboard");
         }
-
-        sessionStorage.setItem("access_token", token);
-        router.push("/dashboard");
+      } catch (err) {
+        console.error("Redirect handling error:", err);
+        setLoading(false);
       }
-    } catch (err: any) {
-      const errorCode = err?.errorCode || "";
-      const errorMessage = err?.message || "";
+    };
 
-      const isUserCancelled =
-        errorCode === "user_cancelled" ||
-        errorMessage.includes("window closed") ||
-        errorMessage.includes("popup_window_error") ||
-        errorMessage.includes("user cancelled");
-
-      if (isUserCancelled) {
-        console.log("Login cancelled by user");
-      } else {
-        console.error("Login failed:", err);
-        setError(
-          errorCode === "interaction_in_progress"
-            ? "A login is already in progress. Please wait."
-            : "Unable to sign in. Please try again."
-        );
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+    handleRedirectResponse();
+  }, [instance, router]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
