@@ -732,8 +732,21 @@ export default function DashboardPage() {
           const data = await response.json();
           setUser(data);
         } else if (response.status === 401) {
-          sessionStorage.removeItem("access_token");
-          router.push("/login");
+          // User not in DB yet - try to extract info from token
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const email = payload.email || payload.sub || "user@example.com";
+            setUser({
+              id: payload.oid || payload.sub || "unknown",
+              display_name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+              email: email,
+              created_at: new Date().toISOString(),
+            });
+          } catch {
+            // Token decode failed - clear and redirect
+            sessionStorage.removeItem("access_token");
+            router.push("/login");
+          }
         }
       } catch (error) {
         console.error("Failed to fetch user:", error);
