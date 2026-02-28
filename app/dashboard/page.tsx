@@ -18,6 +18,7 @@ import {
   CaretUp,
   CaretDown,
   CaretRight,
+  CaretLeft,
   Lightning,
   PaperPlaneTilt,
   X,
@@ -36,6 +37,7 @@ import {
   ChatText,
   Checks,
   Circle,
+  List,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
@@ -414,26 +416,58 @@ function UserDropdown({ user, onLogout }: { user: User | null; onLogout: () => v
   );
 }
 
-function ShellHeader({ user, onLogout }: { user: User | null; onLogout: () => void }) {
+interface ShellHeaderProps {
+  user: User | null;
+  onLogout: () => void;
+  onMenuClick?: () => void;
+}
+
+function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      {/* Logo Lockup */}
-      <LogoWithName variant="white" size="md" />
+      {/* Left Side: Hamburger (mobile) + Logo */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button (Mobile Only) */}
+        <button
+          onClick={onMenuClick}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          aria-label="Open menu"
+        >
+          <List size={20} weight="bold" />
+        </button>
+
+        {/* Logo Lockup */}
+        <LogoWithName variant="white" size="md" />
+      </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2">
         <NotificationPanel />
-        <div className="w-px h-5 bg-white/20 mx-2" />
+        <div className="hidden sm:block w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
       </div>
     </header>
   );
 }
 
-function Sidebar({ currentPath = "/dashboard" }: { currentPath?: string }) {
+interface SidebarProps {
+  currentPath?: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+function Sidebar({
+  currentPath = "/dashboard",
+  collapsed = false,
+  onToggle,
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const navSections: NavSection[] = [
     {
       title: "Overview",
@@ -458,45 +492,122 @@ function Sidebar({ currentPath = "/dashboard" }: { currentPath?: string }) {
     },
   ];
 
-  return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-      <nav className="py-4">
+  const sidebarContent = (
+    <nav className="py-4 flex flex-col h-full">
+      {/* Nav Sections */}
+      <div className="flex-1">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
-            <div className="px-4 mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                {section.title}
-              </span>
-            </div>
+            {!collapsed && (
+              <div className="px-4 mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  {section.title}
+                </span>
+              </div>
+            )}
+            {collapsed && <div className="h-2" />}
             <div className="space-y-0.5 px-3">
               {section.items.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
+                  onClick={onMobileClose}
+                  title={collapsed ? item.label : undefined}
                   className={`
-                    flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors
+                    relative flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors
+                    ${collapsed ? "justify-center" : ""}
                     ${item.active
                       ? "bg-[#EEF4FB] text-[#4A7DC4]"
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     }
                   `}
                 >
-                  <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>
+                  <span className={`flex-shrink-0 ${item.active ? "text-[#4A7DC4]" : "text-gray-400"}`}>
                     {item.icon}
                   </span>
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge && (
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && item.badge && (
                     <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-500 text-white rounded-full">
                       {item.badge}
                     </span>
+                  )}
+                  {collapsed && item.badge && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
                   )}
                 </a>
               ))}
             </div>
           </div>
         ))}
-      </nav>
-    </aside>
+      </div>
+
+      {/* Collapse Toggle Button (Desktop only) */}
+      {onToggle && (
+        <div className="hidden md:block px-3 pb-4 border-t border-gray-100 pt-4">
+          <button
+            onClick={onToggle}
+            className={`
+              flex items-center gap-2 px-3 py-2 w-full rounded-md text-[13px] font-medium
+              text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors
+              ${collapsed ? "justify-center" : ""}
+            `}
+          >
+            {collapsed ? (
+              <CaretRight size={16} weight="bold" />
+            ) : (
+              <>
+                <CaretLeft size={16} weight="bold" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside
+        className={`
+          hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto
+          transition-all duration-200 ease-in-out
+          ${collapsed ? "w-[60px]" : "w-60"}
+        `}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar (Overlay) */}
+      <aside
+        className={`
+          fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
+          transform transition-transform duration-200 ease-in-out overflow-y-auto
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <LogoWithName variant="color" size="sm" />
+          <button
+            onClick={onMobileClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
 
@@ -701,6 +812,8 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAIPanel, setShowAIPanel] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem("access_token");
@@ -760,16 +873,26 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
       {/* Shell Header */}
-      <ShellHeader user={user} onLogout={handleLogout} />
+      <ShellHeader
+        user={user}
+        onLogout={handleLogout}
+        onMenuClick={() => setSidebarMobileOpen(true)}
+      />
 
       {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <Sidebar currentPath="/dashboard" />
+        <Sidebar
+          currentPath="/dashboard"
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          mobileOpen={sidebarMobileOpen}
+          onMobileClose={() => setSidebarMobileOpen(false)}
+        />
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="p-6 max-w-[1400px]">
+          <div className="p-4 md:p-6 max-w-[1400px]">
             {/* Page Header */}
             <div className="mb-6">
               <h1 className="text-[24px] font-semibold text-gray-900">Dashboard</h1>
