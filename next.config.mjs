@@ -5,11 +5,7 @@ const nextConfig = {
 
   // Proxy API calls to backend (only if API URL is configured)
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      console.warn("NEXT_PUBLIC_API_URL not set - API rewrites disabled");
-      return [];
-    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://idealring-api.whitepond-90b8fa05.canadacentral.azurecontainerapps.io";
     return [
       {
         source: "/api/:path*",

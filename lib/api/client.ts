@@ -18,7 +18,7 @@
 
 /** Base URL of the backend API (no trailing slash). */
 export const API_BASE_URL =
-  (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+  (process.env.NEXT_PUBLIC_API_URL || "https://idealring-api.whitepond-90b8fa05.canadacentral.azurecontainerapps.io").replace(/\/$/, "");
 
 /** Optional infra-level API key required by the backend. */
 export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
