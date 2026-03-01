@@ -501,7 +501,7 @@ export default function SettingsLayout({
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl py-6 md:py-8 px-4 md:px-6">
+          <div className="p-4 md:p-6 max-w-[1400px]">
             {/* Settings Page Header */}
             <div className="mb-6">
               <h1 className="text-[22px] md:text-[24px] font-semibold text-gray-900">Settings</h1>
