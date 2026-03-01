@@ -6,14 +6,13 @@ import {
   Bell,
   UserCirclePlus,
   ChatText,
-  Handshake,
   GearSix,
   Circle,
 } from "@phosphor-icons/react";
 
 interface Notification {
   id: string;
-  type: "connection" | "message" | "deal" | "system";
+  type: "connection" | "message" | "system";
   title: string;
   description: string;
   time: string;
@@ -24,9 +23,8 @@ interface Notification {
 const MOCK_NOTIFICATIONS: Notification[] = [
   { id: "1", type: "connection", title: "New connection request", description: "Sarah Chen from Golden Loom wants to connect", time: "2 min ago", read: false, actionUrl: "/connections" },
   { id: "2", type: "message", title: "New message", description: "Raj Patel: \"Can we discuss the cotton yarn pricing?\"", time: "15 min ago", read: false, actionUrl: "/chat" },
-  { id: "3", type: "deal", title: "Deal update", description: "SpinTech Yarns accepted your offer", time: "1 hour ago", read: false, actionUrl: "/deals" },
-  { id: "4", type: "connection", title: "Connection accepted", description: "Mike Torres is now in your network", time: "3 hours ago", read: true, actionUrl: "/connections" },
-  { id: "5", type: "system", title: "Profile incomplete", description: "Add your company details to get better matches", time: "1 day ago", read: true, actionUrl: "/settings" },
+  { id: "3", type: "connection", title: "Connection accepted", description: "Mike Torres is now in your network", time: "3 hours ago", read: true, actionUrl: "/connections" },
+  { id: "4", type: "system", title: "Profile incomplete", description: "Add your company details to get better matches", time: "1 day ago", read: true, actionUrl: "/settings" },
 ];
 
 export function NotificationPanel() {
@@ -47,7 +45,6 @@ export function NotificationPanel() {
     switch (type) {
       case "connection": return <UserCirclePlus size={18} weight="fill" className="text-[#4A7DC4]" />;
       case "message": return <ChatText size={18} weight="fill" className="text-emerald-500" />;
-      case "deal": return <Handshake size={18} weight="fill" className="text-amber-500" />;
       case "system": return <GearSix size={18} weight="fill" className="text-gray-400" />;
     }
   };
