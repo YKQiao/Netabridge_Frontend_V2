@@ -165,7 +165,7 @@ function Sidebar({
       )}
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
+      <aside className="hidden md:flex flex-col w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto overflow-x-hidden">
         {sidebarContent}
       </aside>
 
@@ -173,7 +173,7 @@ function Sidebar({
       <aside
         className={`
           fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
-          transform transition-transform duration-200 ease-in-out overflow-y-auto
+          transform transition-transform duration-200 ease-in-out overflow-y-auto overflow-x-hidden
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >

@@ -682,7 +682,7 @@ function Sidebar({
       {/* Desktop Sidebar */}
       <aside
         className={`
-          hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto
+          hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto overflow-x-hidden
           transition-all duration-200 ease-in-out
           ${collapsed ? "w-[60px]" : "w-60"}
         `}
