@@ -14,16 +14,21 @@ export interface ValidationResult {
   error?: string;
 }
 
-export interface PasswordRequirements {
-  hasMinLength: boolean;   // ≥ 8 characters
+export interface PasswordChecks {
+  minLength: boolean;      // >= 12 characters
   hasUppercase: boolean;   // at least one uppercase letter
   hasLowercase: boolean;   // at least one lowercase letter
   hasNumber: boolean;      // at least one digit
   hasSpecial: boolean;     // at least one special character
 }
 
+export type PasswordStrength = "weak" | "medium" | "strong";
+
 export interface PasswordValidation extends ValidationResult {
-  requirements: PasswordRequirements;
+  requirements: PasswordChecks;
+  /** Alias for requirements (used by PasswordInput component) */
+  checks: PasswordChecks;
+  strength: PasswordStrength;
 }
 
 // ---------------------------------------------------------------------------
@@ -45,19 +50,32 @@ export function validateEmail(email: string): ValidationResult {
 // ---------------------------------------------------------------------------
 
 export function validatePassword(password: string): PasswordValidation {
-  const requirements: PasswordRequirements = {
-    hasMinLength: password.length >= 8,
+  const checks: PasswordChecks = {
+    minLength: password.length >= 12,
     hasUppercase: /[A-Z]/.test(password),
     hasLowercase: /[a-z]/.test(password),
     hasNumber: /\d/.test(password),
-    hasSpecial: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(password),
+    hasSpecial: /[!@#$%^&*()_+\-=[\]{};':"\|,.<>/?`~]/.test(password),
   };
 
-  const allMet = Object.values(requirements).every(Boolean);
+  const metCount = Object.values(checks).filter(Boolean).length;
+  const allMet = metCount === 5;
+
+  // Calculate strength based on requirements met
+  let strength: PasswordStrength;
+  if (metCount >= 5) {
+    strength = "strong";
+  } else if (metCount >= 3) {
+    strength = "medium";
+  } else {
+    strength = "weak";
+  }
 
   return {
     isValid: allMet,
-    requirements,
+    requirements: checks,
+    checks,
+    strength,
     error: allMet ? undefined : "Password does not meet all requirements",
   };
 }

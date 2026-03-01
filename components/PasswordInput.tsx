@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Eye, EyeOff, Check, X } from "lucide-react";
+import { Eye, EyeSlash, Check, X } from "@phosphor-icons/react";
 import { validatePassword, type PasswordValidation } from "@/lib/passwordValidation";
 
 interface PasswordInputProps {
@@ -55,7 +55,7 @@ export function PasswordInput({
           onClick={() => setShowPassword(!showPassword)}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
         >
-          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          {showPassword ? <EyeSlash size={16} /> : <Eye size={16} />}
         </button>
       </div>
 
@@ -143,7 +143,7 @@ export function ConfirmPasswordInput({
           onClick={() => setShowPassword(!showPassword)}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
         >
-          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          {showPassword ? <EyeSlash size={16} /> : <Eye size={16} />}
         </button>
       </div>
       {showMismatch && (
