@@ -16,9 +16,12 @@
 // Config
 // ---------------------------------------------------------------------------
 
-/** Base URL of the backend API (no trailing slash). */
-export const API_BASE_URL =
-  (process.env.NEXT_PUBLIC_API_URL || "https://idealring-api.whitepond-90b8fa05.canadacentral.azurecontainerapps.io").replace(/\/$/, "");
+/**
+ * Base URL of the backend API (no trailing slash).
+ * IMPORTANT: Leave empty to use relative URLs - Vercel/Next.js rewrites will proxy to backend.
+ * This ensures cookies are first-party (same domain), avoiding cross-site cookie issues.
+ */
+export const API_BASE_URL = "";
 
 /** Optional infra-level API key required by the backend. */
 export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
