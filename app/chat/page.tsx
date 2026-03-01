@@ -229,38 +229,70 @@ function SessionItem({ session, isActive, onClick }: { session: ChatSession; isA
   );
 }
 
-// Format message content with basic markdown-like formatting
+// Format message content with markdown support
 function formatMessageContent(text: string) {
-  // Split into paragraphs
-  const paragraphs = text.split(/\n\n+/);
+  if (!text) return null;
 
-  return paragraphs.map((para, i) => {
-    // Check if it's a table (contains | characters)
-    if (para.includes("|") && para.split("\n").length > 1) {
-      const lines = para.split("\n").filter(l => l.trim());
-      const rows = lines.map(line =>
-        line.split("|").map(cell => cell.trim()).filter(cell => cell && !cell.match(/^-+$/))
-      ).filter(row => row.length > 0);
+  const elements: React.ReactNode[] = [];
+  let keyIndex = 0;
 
-      if (rows.length > 1) {
-        return (
-          <div key={i} className="overflow-x-auto my-3">
-            <table className="min-w-full text-[13px] border-collapse">
-              <thead>
-                <tr className="border-b border-gray-300">
+  // First, try to extract and render tables
+  // Match markdown tables: lines with | that have a header separator line (---|---|---)
+  const tableRegex = /(?:^|\n)((?:[^\n]*\|[^\n]*\n)+)/g;
+  let lastIndex = 0;
+  let match;
+
+  // Check if text contains a table pattern
+  const hasTable = text.includes("|") && (text.includes("---") || text.split("|").length > 3);
+
+  if (hasTable) {
+    // Try to parse as a table
+    const lines = text.split(/\n/).filter(l => l.trim());
+    const tableLines = lines.filter(l => l.includes("|"));
+
+    if (tableLines.length >= 2) {
+      // Extract table rows
+      const rows: string[][] = [];
+      let inTable = false;
+      let headerFound = false;
+
+      for (const line of lines) {
+        if (line.includes("|")) {
+          // Skip separator lines (---|---|---)
+          if (line.match(/^[\s|:-]+$/)) {
+            headerFound = true;
+            continue;
+          }
+          const cells = line.split("|").map(c => c.trim()).filter(c => c);
+          if (cells.length > 0) {
+            rows.push(cells);
+            inTable = true;
+          }
+        } else if (inTable && line.trim()) {
+          // Text after table
+          break;
+        }
+      }
+
+      if (rows.length >= 2) {
+        elements.push(
+          <div key={keyIndex++} className="overflow-x-auto my-4 rounded-lg border border-gray-200">
+            <table className="min-w-full text-[13px]">
+              <thead className="bg-gray-50">
+                <tr>
                   {rows[0].map((cell, j) => (
-                    <th key={j} className="text-left py-2 px-3 font-semibold text-gray-700 bg-gray-50">
+                    <th key={j} className="text-left py-3 px-4 font-semibold text-gray-700 border-b border-gray-200">
                       {cell}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100">
                 {rows.slice(1).map((row, ri) => (
-                  <tr key={ri} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={ri} className="hover:bg-gray-50 transition-colors">
                     {row.map((cell, ci) => (
-                      <td key={ci} className="py-2 px-3 text-gray-600">
-                        {cell}
+                      <td key={ci} className="py-3 px-4 text-gray-600">
+                        {formatCellContent(cell)}
                       </td>
                     ))}
                   </tr>
@@ -269,8 +301,46 @@ function formatMessageContent(text: string) {
             </table>
           </div>
         );
+
+        // Get text after table
+        const tableEndIndex = text.lastIndexOf(rows[rows.length - 1].join("|"));
+        const afterTable = text.slice(tableEndIndex + rows[rows.length - 1].join("|").length).trim();
+        if (afterTable) {
+          elements.push(...formatTextContent(afterTable, keyIndex));
+        }
+
+        return elements;
       }
     }
+  }
+
+  // No table found, format as regular text
+  return formatTextContent(text, 0);
+}
+
+// Format cell content (prices, links, etc.)
+function formatCellContent(cell: string): React.ReactNode {
+  // Highlight prices
+  if (cell.match(/^\$[\d,.]+/)) {
+    return <span className="font-semibold text-emerald-600">{cell}</span>;
+  }
+  // Format IDs as badges
+  if (cell.match(/^[a-f0-9]{6,}$/i)) {
+    return <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{cell.slice(0, 8)}...</code>;
+  }
+  return cell;
+}
+
+// Format regular text content
+function formatTextContent(text: string, startKey: number): React.ReactNode[] {
+  const elements: React.ReactNode[] = [];
+  let keyIndex = startKey;
+
+  // Split into paragraphs
+  const paragraphs = text.split(/\n\n+/);
+
+  for (const para of paragraphs) {
+    if (!para.trim()) continue;
 
     // Check if it's a list
     const listMatch = para.match(/^(\d+\.|[-•*])\s/m);
@@ -279,34 +349,39 @@ function formatMessageContent(text: string) {
       const isOrdered = /^\d+\./.test(items[0]);
 
       const ListTag = isOrdered ? "ol" : "ul";
-      return (
-        <ListTag key={i} className={`my-2 pl-5 ${isOrdered ? "list-decimal" : "list-disc"} text-gray-700`}>
+      elements.push(
+        <ListTag key={keyIndex++} className={`my-2 pl-5 space-y-1 ${isOrdered ? "list-decimal" : "list-disc"} text-gray-700`}>
           {items.map((item, j) => (
-            <li key={j} className="mb-1 text-[14px]">
-              {item.replace(/^(\d+\.|[-•*])\s*/, "")}
+            <li key={j} className="text-[14px] leading-relaxed">
+              <span dangerouslySetInnerHTML={{ __html: formatInlineText(item.replace(/^(\d+\.|[-•*])\s*/, "")) }} />
             </li>
           ))}
         </ListTag>
       );
+      continue;
     }
 
-    // Regular paragraph with inline formatting
-    let formatted = para
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/g, "<em>$1</em>")
-      .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-[13px] font-mono">$1</code>');
-
-    // Handle line breaks within paragraph
-    formatted = formatted.split("\n").join("<br/>");
-
-    return (
+    // Regular paragraph
+    elements.push(
       <p
-        key={i}
+        key={keyIndex++}
         className="mb-3 text-[14px] leading-relaxed text-gray-700"
-        dangerouslySetInnerHTML={{ __html: formatted }}
+        dangerouslySetInnerHTML={{ __html: formatInlineText(para) }}
       />
     );
-  });
+  }
+
+  return elements;
+}
+
+// Format inline text (bold, italic, code, links)
+function formatInlineText(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-[13px] font-mono text-gray-800">$1</code>')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-[#4A7DC4] hover:underline">$1</a>')
+    .replace(/\n/g, "<br/>");
 }
 
 function ThinkingIndicator({ message = "Thinking..." }: { message?: string }) {
@@ -684,14 +759,20 @@ export default function ChatPage() {
               </div>
             ) : (
               <div className="max-w-3xl mx-auto">
-                {messages.map((msg, index) => (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    onCopy={() => handleCopy(msg.content.text)}
-                    isLatest={index === messages.length - 1}
-                  />
-                ))}
+                {messages.map((msg, index) => {
+                  // Skip empty assistant messages (shown as ThinkingIndicator instead)
+                  if (msg.role === "ASSISTANT" && !msg.content.text?.trim()) {
+                    return null;
+                  }
+                  return (
+                    <MessageBubble
+                      key={msg.id}
+                      message={msg}
+                      onCopy={() => handleCopy(msg.content.text)}
+                      isLatest={index === messages.length - 1}
+                    />
+                  );
+                })}
                 {(sending || isThinking) && (
                   <ThinkingIndicator message={isThinking ? "Thinking..." : "Responding..."} />
                 )}
