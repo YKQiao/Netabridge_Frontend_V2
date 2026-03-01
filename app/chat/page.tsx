@@ -768,11 +768,15 @@ export default function ChatPage() {
                 assistantText += data;
                 setMessages(prev => {
                   const updated = [...prev];
-                  const lastMsg = updated[updated.length - 1];
-                  if (lastMsg.role === "ASSISTANT") {
-                    lastMsg.content.text = assistantText;
+                  const lastIdx = updated.length - 1;
+                  if (updated[lastIdx]?.role === "ASSISTANT") {
+                    // Create new object to trigger React re-render
+                    updated[lastIdx] = {
+                      ...updated[lastIdx],
+                      content: { ...updated[lastIdx].content, text: assistantText },
+                    };
                   }
-                  return [...updated];
+                  return updated;
                 });
               }
             }
@@ -781,11 +785,11 @@ export default function ChatPage() {
           // Mark typing as complete
           setMessages(prev => {
             const updated = [...prev];
-            const lastMsg = updated[updated.length - 1];
-            if (lastMsg.role === "ASSISTANT") {
-              lastMsg.isTyping = false;
+            const lastIdx = updated.length - 1;
+            if (updated[lastIdx]?.role === "ASSISTANT") {
+              updated[lastIdx] = { ...updated[lastIdx], isTyping: false };
             }
-            return [...updated];
+            return updated;
           });
         } else {
           const data = await res.json();
@@ -802,11 +806,11 @@ export default function ChatPage() {
           setTimeout(() => {
             setMessages(prev => {
               const updated = [...prev];
-              const lastMsg = updated[updated.length - 1];
-              if (lastMsg.role === "ASSISTANT") {
-                lastMsg.isTyping = false;
+              const lastIdx = updated.length - 1;
+              if (updated[lastIdx]?.role === "ASSISTANT") {
+                updated[lastIdx] = { ...updated[lastIdx], isTyping: false };
               }
-              return [...updated];
+              return updated;
             });
           }, 100);
         }

@@ -59,16 +59,37 @@ interface BuyPost {
 // Shared Components
 // =============================================================================
 
-function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
+interface ShellHeaderProps {
+  user: UserType | null;
+  onLogout: () => void;
+  onMenuClick?: () => void;
+}
+
+function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      <LogoWithName variant="white" size="md" />
+      {/* Left Side: Hamburger (mobile) + Logo */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button (Mobile Only) */}
+        <button
+          onClick={onMenuClick}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          aria-label="Open menu"
+        >
+          <List size={20} weight="bold" />
+        </button>
+
+        {/* Logo Lockup */}
+        <LogoWithName variant="white" size="md" />
+      </div>
+
+      {/* Actions */}
       <div className="flex items-center gap-2">
         <NotificationPanel />
-        <div className="w-px h-5 bg-white/20 mx-2" />
+        <div className="hidden sm:block w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
       </div>
     </header>
@@ -82,7 +103,17 @@ interface NavItem {
   active?: boolean;
 }
 
-function Sidebar({ currentPath = "/buy-requests" }: { currentPath?: string }) {
+interface SidebarProps {
+  currentPath?: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+function Sidebar({
+  currentPath = "/buy-requests",
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const navSections: { title: string; items: NavItem[] }[] = [
     { title: "Overview", items: [
       { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
@@ -98,26 +129,67 @@ function Sidebar({ currentPath = "/buy-requests" }: { currentPath?: string }) {
     ]},
   ];
 
-  return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-      <nav className="py-4">
-        {navSections.map((section) => (
-          <div key={section.title} className="mb-6">
-            <div className="px-4 mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
-            </div>
-            <div className="space-y-0.5 px-3">
-              {section.items.map((item) => (
-                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}>
-                  <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
-                </Link>
-              ))}
-            </div>
+  const sidebarContent = (
+    <nav className="py-4">
+      {navSections.map((section) => (
+        <div key={section.title} className="mb-6">
+          <div className="px-4 mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
           </div>
-        ))}
-      </nav>
-    </aside>
+          <div className="space-y-0.5 px-3">
+            {section.items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onMobileClose}
+                className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
+                <span className="flex-1">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex flex-col w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar (Overlay) */}
+      <aside
+        className={`
+          fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
+          transform transition-transform duration-200 ease-in-out overflow-y-auto
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <LogoWithName variant="color" size="sm" />
+          <button
+            onClick={onMobileClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
 
@@ -213,16 +285,16 @@ function BuyPostListItem({ post, onEdit, onDelete, onRespond, currentUserId }: {
   const isOwner = currentUserId && post.owner_id === currentUserId;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg px-5 py-4 hover:shadow-md transition-shadow flex items-center gap-4">
+    <div className="bg-white border border-gray-200 rounded-lg px-4 md:px-5 py-3 md:py-4 hover:shadow-md transition-shadow flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-3 mb-1">
-          <h3 className="text-[14px] font-semibold text-gray-900 truncate">{post.title}</h3>
+        <div className="flex items-center gap-2 md:gap-3 mb-1">
+          <h3 className="text-[13px] md:text-[14px] font-semibold text-gray-900 truncate">{post.title}</h3>
           <StatusBadge status={post.status} />
         </div>
-        <p className="text-[13px] text-gray-500 truncate">{post.description}</p>
+        <p className="text-[12px] md:text-[13px] text-gray-500 truncate">{post.description}</p>
       </div>
 
-      <div className="flex items-center gap-6 text-[12px] text-gray-500 flex-shrink-0">
+      <div className="flex flex-wrap items-center gap-3 md:gap-6 text-[11px] md:text-[12px] text-gray-500 flex-shrink-0">
         {post.budget_range && (
           <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
             <CurrencyDollar size={14} />
@@ -235,14 +307,14 @@ function BuyPostListItem({ post, onEdit, onDelete, onRespond, currentUserId }: {
             {new Date(post.deadline).toLocaleDateString()}
           </span>
         )}
-        <span className="flex items-center gap-1.5 w-24">
+        <span className="flex items-center gap-1.5">
           <Clock size={14} />
           {new Date(post.created_at).toLocaleDateString()}
         </span>
       </div>
 
       {isOwner && (
-        <div className="flex gap-1 flex-shrink-0">
+        <div className="flex gap-1 flex-shrink-0 self-end md:self-auto">
           <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors">
             <Pencil size={16} />
           </button>
@@ -371,6 +443,7 @@ export default function BuyRequestsPage() {
   const [showStats, setShowStats] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "deadline">("newest");
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -442,15 +515,23 @@ export default function BuyRequestsPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
-      <ShellHeader user={user} onLogout={handleLogout} />
+      <ShellHeader
+        user={user}
+        onLogout={handleLogout}
+        onMenuClick={() => setSidebarMobileOpen(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar currentPath="/buy-requests" />
+        <Sidebar
+          currentPath="/buy-requests"
+          mobileOpen={sidebarMobileOpen}
+          onMobileClose={() => setSidebarMobileOpen(false)}
+        />
 
         <main className="flex-1 overflow-y-auto">
-          <div className="p-6 max-w-[1400px]">
+          <div className="p-4 md:p-6 max-w-[1400px]">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
                 <h1 className="text-[24px] font-semibold text-gray-900">Buy Requests</h1>
                 <p className="text-[14px] text-gray-500 mt-1">
@@ -459,7 +540,7 @@ export default function BuyRequestsPage() {
               </div>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Plus size={18} weight="bold" />
                 Create Request
@@ -468,30 +549,30 @@ export default function BuyRequestsPage() {
 
             {/* Stats - Collapsible */}
             {showStats && (
-              <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="bg-white border border-gray-200 rounded-md p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Requests</div>
-                  <div className="text-[24px] font-semibold text-gray-900">{buyPosts.length}</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-md p-3 md:p-4">
+                  <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Requests</div>
+                  <div className="text-[20px] md:text-[24px] font-semibold text-gray-900">{buyPosts.length}</div>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-md p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Open</div>
-                  <div className="text-[24px] font-semibold text-emerald-600">{openCount}</div>
+                <div className="bg-white border border-gray-200 rounded-md p-3 md:p-4">
+                  <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Open</div>
+                  <div className="text-[20px] md:text-[24px] font-semibold text-emerald-600">{openCount}</div>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-md p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Fulfilled</div>
-                  <div className="text-[24px] font-semibold text-blue-600">{fulfilledCount}</div>
+                <div className="bg-white border border-gray-200 rounded-md p-3 md:p-4">
+                  <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Fulfilled</div>
+                  <div className="text-[20px] md:text-[24px] font-semibold text-blue-600">{fulfilledCount}</div>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-md p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Urgent (7 days)</div>
-                  <div className="text-[24px] font-semibold text-amber-600">{urgentCount}</div>
+                <div className="bg-white border border-gray-200 rounded-md p-3 md:p-4">
+                  <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Urgent (7 days)</div>
+                  <div className="text-[20px] md:text-[24px] font-semibold text-amber-600">{urgentCount}</div>
                 </div>
               </div>
             )}
 
             {/* Toolbar - Search left, filters and controls right */}
-            <div className="flex items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               {/* Left: Search */}
-              <div className="relative w-80">
+              <div className="relative w-full lg:w-80">
                 <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
@@ -503,7 +584,7 @@ export default function BuyRequestsPage() {
               </div>
 
               {/* Right: Filters, Sort, View, Stats Toggle */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 md:gap-3">
                 {/* Filter buttons */}
                 <div className="flex gap-1 bg-gray-100 rounded-md p-1">
                   {[
@@ -514,7 +595,7 @@ export default function BuyRequestsPage() {
                     <button
                       key={f.key}
                       onClick={() => setFilter(f.key as any)}
-                      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors ${
+                      className={`px-2 md:px-3 py-1.5 text-[11px] md:text-[12px] font-medium rounded transition-colors ${
                         filter === f.key
                           ? "bg-white text-gray-900 shadow-sm"
                           : "text-gray-600 hover:text-gray-900"
@@ -525,20 +606,20 @@ export default function BuyRequestsPage() {
                   ))}
                 </div>
 
-                <div className="w-px h-6 bg-gray-200" />
+                <div className="hidden md:block w-px h-6 bg-gray-200" />
 
                 {/* Sort */}
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-1.5 border border-gray-200 rounded-md text-[12px] bg-white focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20"
+                  className="px-2 md:px-3 py-1.5 border border-gray-200 rounded-md text-[11px] md:text-[12px] bg-white focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20"
                 >
                   <option value="newest">Newest First</option>
                   <option value="oldest">Oldest First</option>
                   <option value="deadline">By Deadline</option>
                 </select>
 
-                <div className="w-px h-6 bg-gray-200" />
+                <div className="hidden md:block w-px h-6 bg-gray-200" />
 
                 {/* View toggle */}
                 <div className="flex gap-1 bg-gray-100 rounded-md p-1">

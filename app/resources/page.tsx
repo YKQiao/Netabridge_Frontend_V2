@@ -20,6 +20,7 @@ import {
   X,
   GridFour,
   ListBullets,
+  List,
   CaretDown,
   CaretUp,
   Funnel,
@@ -173,16 +174,27 @@ function getResourceIcon(name: string, description: string): { Icon: React.Eleme
 // Shared Components
 // =============================================================================
 
-function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
+function ShellHeader({ user, onLogout, onMenuClick }: { user: UserType | null; onLogout: () => void; onMenuClick?: () => void }) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      <LogoWithName variant="white" size="md" />
+      {/* Left Side: Hamburger (mobile) + Logo */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button (Mobile Only) */}
+        <button
+          onClick={onMenuClick}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          aria-label="Open menu"
+        >
+          <List size={20} weight="bold" />
+        </button>
+        <LogoWithName variant="white" size="md" />
+      </div>
       <div className="flex items-center gap-2">
         <NotificationPanel />
-        <div className="w-px h-5 bg-white/20 mx-2" />
+        <div className="hidden sm:block w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
       </div>
     </header>
@@ -196,7 +208,13 @@ interface NavItem {
   active?: boolean;
 }
 
-function Sidebar({ currentPath = "/resources" }: { currentPath?: string }) {
+interface SidebarProps {
+  currentPath?: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+function Sidebar({ currentPath = "/resources", mobileOpen = false, onMobileClose }: SidebarProps) {
   const navSections: { title: string; items: NavItem[] }[] = [
     { title: "Overview", items: [
       { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
@@ -212,26 +230,67 @@ function Sidebar({ currentPath = "/resources" }: { currentPath?: string }) {
     ]},
   ];
 
-  return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-      <nav className="py-4">
-        {navSections.map((section) => (
-          <div key={section.title} className="mb-6">
-            <div className="px-4 mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
-            </div>
-            <div className="space-y-0.5 px-3">
-              {section.items.map((item) => (
-                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}>
-                  <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
-                </Link>
-              ))}
-            </div>
+  const sidebarContent = (
+    <nav className="py-4">
+      {navSections.map((section) => (
+        <div key={section.title} className="mb-6">
+          <div className="px-4 mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
           </div>
-        ))}
-      </nav>
-    </aside>
+          <div className="space-y-0.5 px-3">
+            {section.items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onMobileClose}
+                className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
+                <span className="flex-1">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex flex-col w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar (Overlay) */}
+      <aside
+        className={`
+          fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
+          transform transition-transform duration-200 ease-in-out overflow-y-auto
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <LogoWithName variant="color" size="sm" />
+          <button
+            onClick={onMobileClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
 
@@ -469,6 +528,7 @@ export default function ResourcesPage() {
   const [showStats, setShowStats] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -514,24 +574,32 @@ export default function ResourcesPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
-      <ShellHeader user={user} onLogout={handleLogout} />
+      <ShellHeader
+        user={user}
+        onLogout={handleLogout}
+        onMenuClick={() => setSidebarMobileOpen(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar currentPath="/resources" />
+        <Sidebar
+          currentPath="/resources"
+          mobileOpen={sidebarMobileOpen}
+          onMobileClose={() => setSidebarMobileOpen(false)}
+        />
 
         <main className="flex-1 overflow-y-auto">
-          <div className="p-6 max-w-[1400px]">
+          <div className="p-4 md:p-6 max-w-[1400px]">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h1 className="text-[24px] font-semibold text-gray-900">My Resources</h1>
-                <p className="text-[14px] text-gray-500 mt-1">
+                <h1 className="text-[20px] md:text-[24px] font-semibold text-gray-900">My Resources</h1>
+                <p className="text-[13px] md:text-[14px] text-gray-500 mt-1">
                   Manage your products and services ({activeCount} active)
                 </p>
               </div>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Plus size={18} weight="bold" />
                 Add Resource
@@ -540,7 +608,7 @@ export default function ResourcesPage() {
 
             {/* Stats - Collapsible */}
             {showStats && (
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white border border-gray-200 rounded-md p-4">
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Resources</div>
                   <div className="text-[24px] font-semibold text-gray-900">{resources.length}</div>
@@ -557,55 +625,58 @@ export default function ResourcesPage() {
             )}
 
             {/* Toolbar */}
-            <div className="bg-white border border-gray-200 rounded-t-md px-4 py-3 flex items-center justify-between">
-              {/* Left side - view toggle & hide stats */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 bg-gray-100 rounded p-0.5">
+            <div className="bg-white border border-gray-200 rounded-t-md px-3 md:px-4 py-3">
+              {/* Mobile layout: stacked */}
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {/* Left side - view toggle & hide stats */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 bg-gray-100 rounded p-0.5">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-1.5 rounded ${viewMode === "grid" ? "bg-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      title="Grid view"
+                    >
+                      <GridFour size={18} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-1.5 rounded ${viewMode === "list" ? "bg-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      title="List view"
+                    >
+                      <ListBullets size={18} />
+                    </button>
+                  </div>
                   <button
-                    onClick={() => setViewMode("grid")}
-                    className={`p-1.5 rounded ${viewMode === "grid" ? "bg-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                    title="Grid view"
+                    onClick={() => setShowStats(!showStats)}
+                    className="hidden sm:flex items-center gap-1 px-2 py-1 text-[12px] text-gray-500 hover:text-gray-700"
                   >
-                    <GridFour size={18} />
-                  </button>
-                  <button
-                    onClick={() => setViewMode("list")}
-                    className={`p-1.5 rounded ${viewMode === "list" ? "bg-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                    title="List view"
-                  >
-                    <ListBullets size={18} />
+                    {showStats ? <CaretUp size={14} /> : <CaretDown size={14} />}
+                    {showStats ? "Hide stats" : "Show stats"}
                   </button>
                 </div>
-                <button
-                  onClick={() => setShowStats(!showStats)}
-                  className="flex items-center gap-1 px-2 py-1 text-[12px] text-gray-500 hover:text-gray-700"
-                >
-                  {showStats ? <CaretUp size={14} /> : <CaretDown size={14} />}
-                  {showStats ? "Hide stats" : "Show stats"}
-                </button>
-              </div>
 
-              {/* Right side - search & filters */}
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search resources..."
-                    className="pl-9 pr-3 py-1.5 border border-gray-200 rounded text-[13px] w-56 focus:outline-none focus:border-[#4A7DC4]"
-                  />
+                {/* Right side - search & filters */}
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="relative flex-1 md:flex-initial">
+                    <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search..."
+                      className="pl-9 pr-3 py-1.5 border border-gray-200 rounded text-[13px] w-full md:w-56 focus:outline-none focus:border-[#4A7DC4]"
+                    />
+                  </div>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className="px-2 md:px-3 py-1.5 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]"
+                  >
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
                 </div>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="px-3 py-1.5 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]"
-                >
-                  <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
               </div>
             </div>
 
@@ -646,23 +717,37 @@ export default function ResourcesPage() {
               </div>
             ) : (
               <div className="bg-white border border-t-0 border-gray-200 rounded-b-md overflow-hidden">
-                {/* List header */}
-                <div className="bg-gray-50 border-b border-gray-200 px-5 py-2 flex items-center gap-4 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                  <div className="w-10" />
-                  <div className="flex-1">Name</div>
-                  <div className="w-20">Quantity</div>
-                  <div className="w-24">Price</div>
-                  <div className="w-24">Created</div>
-                  <div className="w-16">Actions</div>
+                {/* Mobile: Show cards instead of table */}
+                <div className="md:hidden p-4 space-y-3">
+                  {filteredResources.map((resource) => (
+                    <ResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      onEdit={() => console.log("Edit:", resource.id)}
+                      onDelete={() => console.log("Delete:", resource.id)}
+                    />
+                  ))}
                 </div>
-                {filteredResources.map((resource) => (
-                  <ResourceListItem
-                    key={resource.id}
-                    resource={resource}
-                    onEdit={() => console.log("Edit:", resource.id)}
-                    onDelete={() => console.log("Delete:", resource.id)}
-                  />
-                ))}
+                {/* Desktop: Show table with horizontal scroll */}
+                <div className="hidden md:block overflow-x-auto">
+                  {/* List header */}
+                  <div className="bg-gray-50 border-b border-gray-200 px-5 py-2 flex items-center gap-4 text-[11px] font-semibold uppercase tracking-wider text-gray-400 min-w-[700px]">
+                    <div className="w-10" />
+                    <div className="flex-1">Name</div>
+                    <div className="w-20">Quantity</div>
+                    <div className="w-24">Price</div>
+                    <div className="w-24">Created</div>
+                    <div className="w-16">Actions</div>
+                  </div>
+                  {filteredResources.map((resource) => (
+                    <ResourceListItem
+                      key={resource.id}
+                      resource={resource}
+                      onEdit={() => console.log("Edit:", resource.id)}
+                      onDelete={() => console.log("Delete:", resource.id)}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>

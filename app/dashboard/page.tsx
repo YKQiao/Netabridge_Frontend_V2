@@ -545,7 +545,32 @@ function ConnectionsTable({ connections }: { connections: Connection[] }) {
           + Add Connection
         </button>
       </div>
-      <div className="overflow-x-auto">
+
+      {/* Mobile Card View */}
+      <div className="md:hidden divide-y divide-gray-100">
+        {connections.map((conn) => (
+          <div
+            key={conn.id}
+            className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <div className="text-[14px] font-semibold text-gray-900">{conn.company}</div>
+                <div className="text-[13px] text-gray-600">{conn.contact}</div>
+              </div>
+              <StatusBadge status={conn.status} />
+            </div>
+            <div className="text-[12px] text-gray-500 mb-2">{conn.industry}</div>
+            <div className="flex items-center justify-between">
+              <ConnectionLevelBadge level={conn.level} via={conn.levelVia} />
+              <span className="text-[12px] text-gray-400">{conn.lastActivity}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">

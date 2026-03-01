@@ -17,12 +17,15 @@ import {
   Buildings,
   Tag,
   CaretDown,
+  CaretLeft,
+  CaretRight,
   UserCirclePlus,
   Eye,
   ChatText,
   Sparkle,
   X,
   Plus,
+  List,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
@@ -65,16 +68,37 @@ const MOCK_RESULTS: SearchResult[] = [
 // Shared Components
 // =============================================================================
 
-function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
+interface ShellHeaderProps {
+  user: UserType | null;
+  onLogout: () => void;
+  onMenuClick?: () => void;
+}
+
+function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      <LogoWithName variant="white" size="md" />
+      {/* Left Side: Hamburger (mobile) + Logo */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button (Mobile Only) */}
+        <button
+          onClick={onMenuClick}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          aria-label="Open menu"
+        >
+          <List size={20} weight="bold" />
+        </button>
+
+        {/* Logo Lockup */}
+        <LogoWithName variant="white" size="md" />
+      </div>
+
+      {/* Actions */}
       <div className="flex items-center gap-2">
         <NotificationPanel />
-        <div className="w-px h-5 bg-white/20 mx-2" />
+        <div className="hidden sm:block w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
       </div>
     </header>
@@ -88,7 +112,21 @@ interface NavItem {
   active?: boolean;
 }
 
-function Sidebar({ currentPath = "/discover" }: { currentPath?: string }) {
+interface SidebarProps {
+  currentPath?: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+function Sidebar({
+  currentPath = "/discover",
+  collapsed = false,
+  onToggle,
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const navSections: { title: string; items: NavItem[] }[] = [
     { title: "Overview", items: [
       { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
@@ -104,27 +142,112 @@ function Sidebar({ currentPath = "/discover" }: { currentPath?: string }) {
     ]},
   ];
 
-  return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-      <nav className="py-4">
+  const sidebarContent = (
+    <nav className="py-4 flex flex-col h-full">
+      {/* Nav Sections */}
+      <div className="flex-1">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
-            <div className="px-4 mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
-            </div>
+            {!collapsed && (
+              <div className="px-4 mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
+              </div>
+            )}
+            {collapsed && <div className="h-2" />}
             <div className="space-y-0.5 px-3">
               {section.items.map((item) => (
-                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}>
-                  <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
-                  
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onMobileClose}
+                  title={collapsed ? item.label : undefined}
+                  className={`
+                    relative flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors
+                    ${collapsed ? "justify-center" : ""}
+                    ${item.active
+                      ? "bg-[#EEF4FB] text-[#4A7DC4]"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    }
+                  `}
+                >
+                  <span className={`flex-shrink-0 ${item.active ? "text-[#4A7DC4]" : "text-gray-400"}`}>
+                    {item.icon}
+                  </span>
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
                 </Link>
               ))}
             </div>
           </div>
         ))}
-      </nav>
-    </aside>
+      </div>
+
+      {/* Collapse Toggle Button (Desktop only) */}
+      {onToggle && (
+        <div className="hidden md:block px-3 pb-4 border-t border-gray-100 pt-4">
+          <button
+            onClick={onToggle}
+            className={`
+              flex items-center gap-2 px-3 py-2 w-full rounded-md text-[13px] font-medium
+              text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors
+              ${collapsed ? "justify-center" : ""}
+            `}
+          >
+            {collapsed ? (
+              <CaretRight size={16} weight="bold" />
+            ) : (
+              <>
+                <CaretLeft size={16} weight="bold" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside
+        className={`
+          hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto
+          transition-all duration-200 ease-in-out
+          ${collapsed ? "w-[60px]" : "w-60"}
+        `}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar (Overlay) */}
+      <aside
+        className={`
+          fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
+          transform transition-transform duration-200 ease-in-out overflow-y-auto
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <LogoWithName variant="color" size="sm" />
+          <button
+            onClick={onMobileClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
 
@@ -142,29 +265,29 @@ function SearchResultCard({ result, onConnect, onView }: { result: SearchResult;
   const typeStyle = typeColors[result.type];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-all hover:border-[#4A7DC4]/30">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-5 hover:shadow-md transition-all hover:border-[#4A7DC4]/30">
+      <div className="flex items-start justify-between mb-3 gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {result.type === "user" ? (
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-lg font-semibold">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-base sm:text-lg font-semibold flex-shrink-0">
               {result.name[0]}
             </div>
           ) : (
-            <div className={`w-12 h-12 rounded-lg ${typeStyle.bg} flex items-center justify-center`}>
-              {result.type === "resource" ? <Package size={24} className={typeStyle.text} /> : <ShoppingCart size={24} className={typeStyle.text} />}
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg ${typeStyle.bg} flex items-center justify-center flex-shrink-0`}>
+              {result.type === "resource" ? <Package size={20} className={`${typeStyle.text} sm:w-6 sm:h-6`} /> : <ShoppingCart size={20} className={`${typeStyle.text} sm:w-6 sm:h-6`} />}
             </div>
           )}
-          <div>
-            <h3 className="text-[15px] font-semibold text-gray-900">{result.name}</h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[14px] sm:text-[15px] font-semibold text-gray-900 truncate">{result.name}</h3>
             <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${typeStyle.bg} ${typeStyle.text}`}>
               {typeStyle.label}
             </span>
           </div>
         </div>
         {result.matchScore && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 rounded text-amber-700">
+          <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 rounded text-amber-700 flex-shrink-0">
             <Sparkle size={14} weight="fill" />
-            <span className="text-[12px] font-semibold">{result.matchScore}%</span>
+            <span className="text-[11px] sm:text-[12px] font-semibold">{result.matchScore}%</span>
           </div>
         )}
       </div>
@@ -207,15 +330,16 @@ function SearchResultCard({ result, onConnect, onView }: { result: SearchResult;
       <div className="flex gap-2">
         <button
           onClick={onView}
-          className="flex-1 px-3 py-2 border border-gray-200 text-gray-700 text-[13px] font-medium rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+          className="flex-1 px-2 sm:px-3 py-2 border border-gray-200 text-gray-700 text-[12px] sm:text-[13px] font-medium rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 sm:gap-1.5"
         >
           <Eye size={16} />
-          View Details
+          <span className="sm:hidden">View</span>
+          <span className="hidden sm:inline">View Details</span>
         </button>
         {result.type === "user" && (
           <button
             onClick={onConnect}
-            className="flex-1 px-3 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 px-2 sm:px-3 py-2 bg-[#4A7DC4] text-white text-[12px] sm:text-[13px] font-medium rounded hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-1 sm:gap-1.5"
           >
             <UserCirclePlus size={16} />
             Connect
@@ -224,7 +348,7 @@ function SearchResultCard({ result, onConnect, onView }: { result: SearchResult;
         {result.type !== "user" && (
           <button
             onClick={onConnect}
-            className="flex-1 px-3 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 px-2 sm:px-3 py-2 bg-[#4A7DC4] text-white text-[12px] sm:text-[13px] font-medium rounded hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-1 sm:gap-1.5"
           >
             <ChatText size={16} />
             Contact
@@ -237,7 +361,7 @@ function SearchResultCard({ result, onConnect, onView }: { result: SearchResult;
 
 function FilterSidebar({ filters, onFilterChange }: { filters: any; onFilterChange: (key: string, value: any) => void }) {
   return (
-    <div className="w-64 flex-shrink-0">
+    <div className="w-full lg:w-64 flex-shrink-0">
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[14px] font-semibold text-gray-900">Filters</h3>
@@ -327,6 +451,8 @@ export default function DiscoverPage() {
   const [results, setResults] = useState<SearchResult[]>(MOCK_RESULTS);
   const [filters, setFilters] = useState({ types: [] as string[] });
   const [showFilters, setShowFilters] = useState(true);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -358,13 +484,23 @@ export default function DiscoverPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
-      <ShellHeader user={user} onLogout={handleLogout} />
+      <ShellHeader
+        user={user}
+        onLogout={handleLogout}
+        onMenuClick={() => setSidebarMobileOpen(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar currentPath="/discover" />
+        <Sidebar
+          currentPath="/discover"
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          mobileOpen={sidebarMobileOpen}
+          onMobileClose={() => setSidebarMobileOpen(false)}
+        />
 
         <main className="flex-1 overflow-y-auto">
-          <div className="p-6 max-w-[1400px]">
+          <div className="p-4 md:p-6 max-w-[1400px]">
             {/* Page Header with Search */}
             <div className="mb-6">
               <h1 className="text-[24px] font-semibold text-gray-900">Discover</h1>
@@ -375,61 +511,75 @@ export default function DiscoverPage() {
 
             {/* Search Bar */}
             <form onSubmit={handleSearch} className="mb-6">
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1 relative">
                   <MagnifyingGlass size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search for suppliers, resources, or opportunities..."
+                    placeholder="Search suppliers, resources..."
                     className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg text-[14px] focus:outline-none focus:border-[#4A7DC4] focus:ring-2 focus:ring-[#4A7DC4]/20"
                   />
                 </div>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-lg hover:bg-[#3A5A8C] transition-colors"
-                >
-                  Search
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`px-4 py-3 border rounded-lg text-[14px] font-medium transition-colors flex items-center gap-2 ${
-                    showFilters ? "bg-[#EEF4FB] border-[#4A7DC4] text-[#4A7DC4]" : "border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  <SlidersHorizontal size={18} />
-                  Filters
-                </button>
+                <div className="flex gap-2 sm:gap-3">
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-none px-4 sm:px-6 py-3 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-lg hover:bg-[#3A5A8C] transition-colors"
+                  >
+                    Search
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`flex-1 sm:flex-none px-4 py-3 border rounded-lg text-[14px] font-medium transition-colors flex items-center justify-center gap-2 ${
+                      showFilters ? "bg-[#EEF4FB] border-[#4A7DC4] text-[#4A7DC4]" : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <SlidersHorizontal size={18} />
+                    <span className="hidden sm:inline">Filters</span>
+                  </button>
+                </div>
               </div>
             </form>
 
             {/* AI Suggestion */}
-            <div className="bg-gradient-to-r from-[#4A7DC4]/10 to-[#354A5F]/10 border border-[#4A7DC4]/20 rounded-lg px-4 py-3 mb-6 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#4A7DC4] flex items-center justify-center">
+            <div className="bg-gradient-to-r from-[#4A7DC4]/10 to-[#354A5F]/10 border border-[#4A7DC4]/20 rounded-lg px-3 sm:px-4 py-3 mb-6 flex items-start sm:items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#4A7DC4] flex items-center justify-center flex-shrink-0">
                 <Sparkle size={18} weight="fill" className="text-white" />
               </div>
-              <div className="flex-1">
-                <p className="text-[13px] text-gray-700">
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] sm:text-[13px] text-gray-700">
                   <strong className="font-semibold">AI Suggestion:</strong>{" "}
-                  Based on your recent activity, you might be interested in cotton yarn suppliers from India.{" "}
+                  <span className="hidden sm:inline">Based on your recent activity, you might be interested in cotton yarn suppliers from India.</span>
+                  <span className="sm:hidden">Cotton yarn suppliers from India may interest you.</span>{" "}
                   <button className="text-[#4A7DC4] font-medium hover:underline">Show me</button>
                 </p>
               </div>
-              <button className="p-1 text-gray-400 hover:text-gray-600">
+              <button className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0">
                 <X size={16} />
               </button>
             </div>
 
             {/* Main Content */}
-            <div className="flex gap-6">
-              {/* Filters */}
-              {showFilters && <FilterSidebar filters={filters} onFilterChange={handleFilterChange} />}
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Filters - hidden on mobile, shown on larger screens */}
+              {showFilters && (
+                <div className="hidden lg:block">
+                  <FilterSidebar filters={filters} onFilterChange={handleFilterChange} />
+                </div>
+              )}
+
+              {/* Mobile Filters - collapsible on mobile */}
+              {showFilters && (
+                <div className="lg:hidden">
+                  <FilterSidebar filters={filters} onFilterChange={handleFilterChange} />
+                </div>
+              )}
 
               {/* Results */}
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                   <span className="text-[13px] text-gray-500">
                     Showing <strong>{results.length}</strong> results
                   </span>
@@ -448,7 +598,7 @@ export default function DiscoverPage() {
                     <p className="text-[14px] text-gray-500">Try adjusting your search or filters</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
                     {results.map((result) => (
                       <SearchResultCard
                         key={result.id}
