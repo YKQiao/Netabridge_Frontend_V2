@@ -309,15 +309,23 @@ function formatMessageContent(text: string) {
   });
 }
 
-function ThinkingIndicator() {
+function ThinkingIndicator({ message = "Thinking..." }: { message?: string }) {
   return (
-    <div className="flex items-center gap-2 px-4 py-3">
-      <div className="flex gap-1">
-        <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-        <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-        <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+    <div className="flex items-start gap-3 mb-4">
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center flex-shrink-0">
+        <Robot size={16} weight="fill" className="text-white" />
       </div>
-      <span className="text-[13px] text-gray-500">Thinking...</span>
+      <div className="flex-1">
+        <div className="text-[12px] font-medium text-gray-700 mb-1">NetaBridge AI</div>
+        <div className="bg-gray-100 rounded-lg px-4 py-3 inline-flex items-center gap-2">
+          <div className="flex gap-1">
+            <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+            <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+            <div className="w-2 h-2 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+          </div>
+          <span className="text-[13px] text-gray-500">{message}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -659,16 +667,6 @@ export default function ChatPage() {
                 <p className="text-[11px] text-gray-500">Your intelligent trade assistant</p>
               </div>
             </div>
-            {(sending || isThinking) && (
-              <div className="flex items-center gap-2 text-[12px] text-[#4A7DC4]">
-                <div className="flex gap-0.5">
-                  <div className="w-1.5 h-1.5 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <div className="w-1.5 h-1.5 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <div className="w-1.5 h-1.5 bg-[#4A7DC4] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                </div>
-                {isThinking ? "Thinking..." : "Responding..."}
-              </div>
-            )}
           </div>
 
           {/* Messages */}
@@ -694,7 +692,9 @@ export default function ChatPage() {
                     isLatest={index === messages.length - 1}
                   />
                 ))}
-                {isThinking && <ThinkingIndicator />}
+                {(sending || isThinking) && (
+                  <ThinkingIndicator message={isThinking ? "Thinking..." : "Responding..."} />
+                )}
                 <div ref={messagesEndRef} />
               </div>
             )}
