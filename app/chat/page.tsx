@@ -54,75 +54,85 @@ interface ChatMessage {
 }
 
 // =============================================================================
-// Typing Effect Hook
+// Rich Content Components for AI Responses
 // =============================================================================
 
-function useTypingEffect(text: string, isTyping: boolean, onComplete?: () => void) {
-  const [displayedText, setDisplayedText] = useState("");
-  const [isComplete, setIsComplete] = useState(false);
-  const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
-
-  useEffect(() => {
-    if (!isTyping) {
-      setDisplayedText(text);
-      setIsComplete(true);
-      return;
-    }
-
-    setDisplayedText("");
-    setIsComplete(false);
-    let index = 0;
-
-    const typeChar = () => {
-      if (index < text.length) {
-        setDisplayedText(text.slice(0, index + 1));
-        index++;
-
-        // Variable speed: faster for spaces/punctuation, slower for new words
-        const char = text[index - 1];
-        const nextChar = text[index] || "";
-        let delay = 15 + Math.random() * 25; // Base 15-40ms
-
-        if (char === " " && /[A-Z]/.test(nextChar)) {
-          delay = 80 + Math.random() * 120; // Pause before new sentence
-        } else if (char === "\n") {
-          delay = 100 + Math.random() * 150; // Pause at line breaks
-        } else if (/[.,!?;:]/.test(char)) {
-          delay = 60 + Math.random() * 80; // Pause at punctuation
-        } else if (char === " ") {
-          delay = 20 + Math.random() * 30; // Quick for spaces
-        }
-
-        setTimeout(typeChar, delay);
-      } else {
-        setIsComplete(true);
-        onCompleteRef.current?.();
-      }
-    };
-
-    // Start with a small delay
-    setTimeout(typeChar, 300);
-
-    return () => {
-      index = text.length; // Stop typing on cleanup
-    };
-  }, [text, isTyping]);
-
-  return { displayedText, isComplete };
-}
-
-// =============================================================================
-// Typing Cursor Component (like MS Word)
-// =============================================================================
-
-function TypingCursor({ visible }: { visible: boolean }) {
-  if (!visible) return null;
+// Supplier/Resource Card Component
+function SupplierCard({ data }: { data: { id?: string; name: string; description?: string; price?: number; currency?: string; company?: string } }) {
   return (
-    <span className="inline-block w-0.5 h-4 bg-[#4A7DC4] ml-0.5 animate-pulse"
-          style={{ animation: "blink 0.8s step-end infinite" }} />
+    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h4 className="font-semibold text-gray-900 text-[15px]">{data.name}</h4>
+          {data.company && <p className="text-[13px] text-gray-500">{data.company}</p>}
+          {data.description && (
+            <p className="text-[13px] text-gray-600 mt-1 line-clamp-2">{data.description}</p>
+          )}
+        </div>
+        {data.price && (
+          <div className="text-right ml-4">
+            <span className="text-lg font-bold text-emerald-600">
+              {data.currency || "$"}{data.price.toLocaleString()}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="flex gap-2 mt-3">
+        <button className="px-3 py-1.5 text-[12px] font-medium bg-[#4A7DC4] text-white rounded-lg hover:bg-[#3A5A8C] transition-colors">
+          View Details
+        </button>
+        <button className="px-3 py-1.5 text-[12px] font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+          Request Quote
+        </button>
+      </div>
+    </div>
   );
 }
+
+// Contact/Connection Card Component
+function ContactCard({ data }: { data: { name: string; email?: string; company?: string; role?: string } }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white font-semibold">
+          {data.name.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1">
+          <h4 className="font-semibold text-gray-900 text-[14px]">{data.name}</h4>
+          {data.role && <p className="text-[12px] text-gray-500">{data.role}</p>}
+          {data.company && <p className="text-[12px] text-gray-500">{data.company}</p>}
+        </div>
+        <button className="px-3 py-1.5 text-[12px] font-medium bg-[#4A7DC4] text-white rounded-lg hover:bg-[#3A5A8C] transition-colors">
+          Connect
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Results Grid Component
+function ResultsGrid({ children, columns = 2 }: { children: React.ReactNode; columns?: 1 | 2 | 3 }) {
+  const gridCols = columns === 1 ? "grid-cols-1" : columns === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
+  return <div className={`grid ${gridCols} gap-3 my-3`}>{children}</div>;
+}
+
+// Quick Action Chips
+function ActionChips({ actions }: { actions: { label: string; onClick?: () => void }[] }) {
+  return (
+    <div className="flex flex-wrap gap-2 mt-3">
+      {actions.map((action, i) => (
+        <button
+          key={i}
+          onClick={action.onClick}
+          className="px-3 py-1.5 text-[12px] font-medium bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 
 // =============================================================================
 // Shared Components
@@ -411,23 +421,21 @@ function MessageBubble({ message, onCopy, isLatest }: {
   isLatest?: boolean;
 }) {
   const isUser = message.role === "USER";
-  const shouldType = isLatest && !isUser && message.isTyping;
-  const { displayedText, isComplete } = useTypingEffect(
-    message.content.text,
-    shouldType || false
-  );
-
-  const textToShow = shouldType ? displayedText : message.content.text;
+  const isStreaming = message.isTyping && isLatest;
+  const isComplete = !message.isTyping;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
-      <div className={`max-w-[75%] ${isUser ? "order-2" : "order-1"}`}>
+      <div className={`max-w-[80%] ${isUser ? "order-2" : "order-1"}`}>
         {!isUser && (
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center">
-              <Robot size={14} weight="fill" className="text-white" />
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center">
+              <Robot size={15} weight="fill" className="text-white" />
             </div>
             <span className="text-[12px] font-medium text-gray-700">NetaBridge AI</span>
+            {isStreaming && (
+              <span className="text-[11px] text-[#4A7DC4] animate-pulse">typing...</span>
+            )}
           </div>
         )}
         <div
@@ -440,21 +448,23 @@ function MessageBubble({ message, onCopy, isLatest }: {
           {isUser ? (
             <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{message.content.text}</p>
           ) : (
-            <div className="prose prose-sm max-w-none">
-              {formatMessageContent(textToShow)}
-              {shouldType && !isComplete && <TypingCursor visible={true} />}
+            <div className="prose prose-sm max-w-none text-gray-700">
+              {formatMessageContent(message.content.text)}
+              {isStreaming && (
+                <span className="inline-block w-2 h-4 bg-[#4A7DC4] ml-0.5 animate-pulse rounded-sm" />
+              )}
             </div>
           )}
         </div>
-        {!isUser && isComplete && (
+        {!isUser && isComplete && message.content.text && (
           <div className="flex items-center gap-1 mt-1.5 pl-1">
-            <button onClick={onCopy} className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors" title="Copy">
+            <button onClick={onCopy} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors" title="Copy">
               <Copy size={14} />
             </button>
-            <button className="p-1 text-gray-400 hover:text-emerald-600 rounded transition-colors" title="Helpful">
+            <button className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors" title="Helpful">
               <ThumbsUp size={14} />
             </button>
-            <button className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors" title="Not helpful">
+            <button className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Not helpful">
               <ThumbsDown size={14} />
             </button>
           </div>
@@ -760,7 +770,7 @@ export default function ChatPage() {
             ) : (
               <div className="max-w-3xl mx-auto">
                 {messages.map((msg, index) => {
-                  // Skip empty assistant messages (shown as ThinkingIndicator instead)
+                  // Skip empty assistant messages (we show ThinkingIndicator instead)
                   if (msg.role === "ASSISTANT" && !msg.content.text?.trim()) {
                     return null;
                   }
@@ -773,7 +783,8 @@ export default function ChatPage() {
                     />
                   );
                 })}
-                {(sending || isThinking) && (
+                {/* Only show ThinkingIndicator when waiting for response, not while streaming */}
+                {(sending || isThinking) && !messages.some(m => m.role === "ASSISTANT" && m.isTyping && m.content.text?.trim()) && (
                   <ThinkingIndicator message={isThinking ? "Thinking..." : "Responding..."} />
                 )}
                 <div ref={messagesEndRef} />
