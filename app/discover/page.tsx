@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { apiClient } from "@/lib/api/client";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
@@ -52,17 +53,87 @@ interface SearchResult {
   company?: string;
   price?: string;
   matchScore?: number;
+  isDemo?: boolean;
 }
 
-// Mock search results for demo
+// API Response Types
+interface ApiResource {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string;
+  quantity: number;
+  price: number | null;
+  currency: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface ApiBuyPost {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string;
+  budget_range: string | null;
+  deadline: string | null;
+  status: "OPEN" | "CLOSED" | "FULFILLED";
+  created_at: string;
+  updated_at: string;
+}
+
+interface ApiConnection {
+  connection_id: string;
+  partner: {
+    id: string;
+    email: string;
+    display_name: string;
+  };
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "BLOCKED";
+  updated_at: string;
+}
+
+// Mock search results for demo/fallback
 const MOCK_RESULTS: SearchResult[] = [
-  { id: "1", type: "user", name: "SpinTech Yarns", description: "Premium cotton yarn supplier with 15+ years of experience", tags: ["Cotton", "Yarn", "Wholesale"], location: "Mumbai, India", company: "SpinTech Industries", matchScore: 95 },
-  { id: "2", type: "resource", name: "Organic Cotton Yarn - 30s Count", description: "High-quality organic cotton yarn, ideal for sustainable fashion", tags: ["Organic", "Cotton", "Sustainable"], price: "$2.50/kg", matchScore: 88 },
-  { id: "3", type: "user", name: "Golden Loom Textiles", description: "Full-service fabric manufacturing and export company", tags: ["Fabric", "Manufacturing", "Export"], location: "Ahmedabad, India", company: "Golden Loom Pvt Ltd", matchScore: 82 },
-  { id: "4", type: "buy_post", name: "Looking for Cotton Yarn Suppliers", description: "Need 500kg monthly supply of 40s count cotton yarn", tags: ["Cotton", "Yarn", "Bulk Order"], price: "Budget: $1,200", matchScore: 78 },
-  { id: "5", type: "resource", name: "Recycled Polyester Yarn", description: "Eco-friendly recycled polyester yarn for sportswear", tags: ["Recycled", "Polyester", "Sportswear"], price: "$3.20/kg", matchScore: 75 },
-  { id: "6", type: "user", name: "EcoWear Fashions", description: "Sustainable fashion brand seeking ethical suppliers", tags: ["Fashion", "Sustainable", "Retail"], location: "Los Angeles, USA", company: "EcoWear Inc", matchScore: 70 },
+  { id: "demo-1", type: "user", name: "SpinTech Yarns", description: "Premium cotton yarn supplier with 15+ years of experience", tags: ["Cotton", "Yarn", "Wholesale"], location: "Mumbai, India", company: "SpinTech Industries", matchScore: 95, isDemo: true },
+  { id: "demo-2", type: "resource", name: "Organic Cotton Yarn - 30s Count", description: "High-quality organic cotton yarn, ideal for sustainable fashion", tags: ["Organic", "Cotton", "Sustainable"], price: "$2.50/kg", matchScore: 88, isDemo: true },
+  { id: "demo-3", type: "user", name: "Golden Loom Textiles", description: "Full-service fabric manufacturing and export company", tags: ["Fabric", "Manufacturing", "Export"], location: "Ahmedabad, India", company: "Golden Loom Pvt Ltd", matchScore: 82, isDemo: true },
+  { id: "demo-4", type: "buy_post", name: "Looking for Cotton Yarn Suppliers", description: "Need 500kg monthly supply of 40s count cotton yarn", tags: ["Cotton", "Yarn", "Bulk Order"], price: "Budget: $1,200", matchScore: 78, isDemo: true },
+  { id: "demo-5", type: "resource", name: "Recycled Polyester Yarn", description: "Eco-friendly recycled polyester yarn for sportswear", tags: ["Recycled", "Polyester", "Sportswear"], price: "$3.20/kg", matchScore: 75, isDemo: true },
+  { id: "demo-6", type: "user", name: "EcoWear Fashions", description: "Sustainable fashion brand seeking ethical suppliers", tags: ["Fashion", "Sustainable", "Retail"], location: "Los Angeles, USA", company: "EcoWear Inc", matchScore: 70, isDemo: true },
 ];
+
+// Helper functions to transform API data to SearchResult format
+function resourceToSearchResult(resource: ApiResource): SearchResult {
+  return {
+    id: resource.id,
+    type: "resource",
+    name: resource.name,
+    description: resource.description || "No description provided",
+    price: resource.price ? `${resource.currency || "$"}${resource.price}` : undefined,
+    tags: resource.is_active ? ["Active"] : ["Inactive"],
+  };
+}
+
+function buyPostToSearchResult(post: ApiBuyPost): SearchResult {
+  return {
+    id: post.id,
+    type: "buy_post",
+    name: post.title,
+    description: post.description || "No description provided",
+    price: post.budget_range ? `Budget: ${post.budget_range}` : undefined,
+    tags: [post.status],
+  };
+}
+
+function connectionToSearchResult(conn: ApiConnection): SearchResult {
+  return {
+    id: conn.connection_id,
+    type: "user",
+    name: conn.partner.display_name || conn.partner.email,
+    description: `Connected user: ${conn.partner.email}`,
+    company: conn.partner.display_name,
+  };
+}
 
 // =============================================================================
 // Shared Components
@@ -323,6 +394,11 @@ function SearchResultCard({ result, onConnect, onView }: { result: SearchResult;
               {tag}
             </span>
           ))}
+          {result.isDemo && (
+            <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-[11px] rounded">
+              Demo
+            </span>
+          )}
         </div>
       )}
 
@@ -446,31 +522,99 @@ function FilterSidebar({ filters, onFilterChange }: { filters: any; onFilterChan
 
 export default function DiscoverPage() {
   const router = useRouter();
-  const { user, isLoading: loading, logout: handleLogout } = useAuth();
+  const { user, isLoading: authLoading, logout: handleLogout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>(MOCK_RESULTS);
+  const [allResults, setAllResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [filters, setFilters] = useState({ types: [] as string[] });
   const [showFilters, setShowFilters] = useState(true);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [usingDemoData, setUsingDemoData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) router.push("/login");
+  }, [authLoading, user, router]);
+
+  // Fetch data from API on mount
+  const fetchDiscoverData = useCallback(async () => {
+    if (!user) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Fetch resources, buy-posts, and connections in parallel
+      const [resourcesRes, buyPostsRes, connectionsRes] = await Promise.allSettled([
+        apiClient.get<ApiResource[]>("/api/v1/resources"),
+        apiClient.get<ApiBuyPost[]>("/api/v1/buy-posts"),
+        apiClient.get<ApiConnection[]>("/api/v1/connections"),
+      ]);
+
+      const searchResults: SearchResult[] = [];
+
+      // Process resources
+      if (resourcesRes.status === "fulfilled" && Array.isArray(resourcesRes.value)) {
+        searchResults.push(...resourcesRes.value.map(resourceToSearchResult));
+      }
+
+      // Process buy posts
+      if (buyPostsRes.status === "fulfilled" && Array.isArray(buyPostsRes.value)) {
+        searchResults.push(...buyPostsRes.value.map(buyPostToSearchResult));
+      }
+
+      // Process connections (users)
+      if (connectionsRes.status === "fulfilled" && Array.isArray(connectionsRes.value)) {
+        // Only show accepted connections as discoverable users
+        const acceptedConnections = connectionsRes.value.filter(c => c.status === "ACCEPTED");
+        searchResults.push(...acceptedConnections.map(connectionToSearchResult));
+      }
+
+      // If we got any real data, use it
+      if (searchResults.length > 0) {
+        setAllResults(searchResults);
+        setResults(searchResults);
+        setUsingDemoData(false);
+      } else {
+        // Fall back to demo data if no results
+        setAllResults(MOCK_RESULTS);
+        setResults(MOCK_RESULTS);
+        setUsingDemoData(true);
+      }
+    } catch (err) {
+      console.error("Failed to fetch discover data:", err);
+      // On error, fall back to demo data
+      setAllResults(MOCK_RESULTS);
+      setResults(MOCK_RESULTS);
+      setUsingDemoData(true);
+      setError("Could not load live data. Showing demo results.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (!loading && !user) router.push("/login");
-  }, [loading, user, router]);
+    if (user) {
+      fetchDiscoverData();
+    }
+  }, [user, fetchDiscoverData]);
 
+  // Client-side search filtering
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, this would call the backend search API
-    // For now, filter mock results
-    if (searchQuery) {
+
+    if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      setResults(MOCK_RESULTS.filter(r =>
+      setResults(allResults.filter(r =>
         r.name.toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q) ||
         r.tags?.some(t => t.toLowerCase().includes(q))
       ));
     } else {
-      setResults(MOCK_RESULTS);
+      setResults(allResults);
     }
   };
 
@@ -478,7 +622,7 @@ export default function DiscoverPage() {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  if (loading) {
+  if (authLoading || isLoading) {
     return <BrandedLoading context="discover" />;
   }
 
@@ -503,10 +647,20 @@ export default function DiscoverPage() {
           <div className="p-4 md:p-6 max-w-[1400px]">
             {/* Page Header with Search */}
             <div className="mb-6">
-              <h1 className="text-[24px] font-semibold text-gray-900">Discover</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-[24px] font-semibold text-gray-900">Discover</h1>
+                {usingDemoData && (
+                  <span className="px-2 py-1 bg-orange-100 text-orange-700 text-[11px] font-medium rounded">
+                    Demo Data
+                  </span>
+                )}
+              </div>
               <p className="text-[14px] text-gray-500 mt-1">
                 Find suppliers, resources, and opportunities across the network
               </p>
+              {error && (
+                <p className="text-[12px] text-orange-600 mt-1">{error}</p>
+              )}
             </div>
 
             {/* Search Bar */}
@@ -581,7 +735,7 @@ export default function DiscoverPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                   <span className="text-[13px] text-gray-500">
-                    Showing <strong>{results.length}</strong> results
+                    Showing <strong>{results.length}</strong> {usingDemoData ? "demo " : ""}results
                   </span>
                   <select className="px-3 py-1.5 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]">
                     <option>Sort by: Relevance</option>

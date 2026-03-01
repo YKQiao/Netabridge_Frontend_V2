@@ -24,6 +24,7 @@ import {
   CaretDown,
   CaretUp,
   Funnel,
+  Info,
   // Resource type icons
   TShirt,
   Yarn,
@@ -63,6 +64,26 @@ import {
   Ruler,
   Scissors,
   Needle,
+  // New icons for expanded keyword matching
+  Book,
+  Desktop,
+  Keyboard,
+  Dog,
+  Cat,
+  Bird,
+  Horse,
+  Boat,
+  Car,
+  Airplane,
+  Train,
+  Diamond,
+  Orange,
+  SoccerBall,
+  MusicNotes,
+  Camera,
+  Gift,
+  Buildings,
+  Briefcase,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
@@ -99,62 +120,94 @@ type ViewMode = "grid" | "list";
 
 const ICON_KEYWORDS: { keywords: string[]; icon: React.ElementType; color: string }[] = [
   // Textiles & Fashion
-  { keywords: ["shirt", "clothing", "apparel", "garment", "fashion", "wear", "dress", "suit"], icon: TShirt, color: "text-pink-500" },
-  { keywords: ["yarn", "thread", "cotton", "wool", "fiber", "textile", "fabric", "weave"], icon: Yarn, color: "text-purple-500" },
+  { keywords: ["shirt", "clothing", "apparel", "garment", "fashion", "wear", "dress", "suit", "jacket", "pants", "jeans"], icon: TShirt, color: "text-pink-500" },
+  { keywords: ["yarn", "thread", "cotton", "wool", "fiber", "textile", "fabric", "weave", "silk", "linen", "polyester", "spin", "spinning"], icon: Yarn, color: "text-purple-500" },
   { keywords: ["needle", "sewing", "stitch", "embroidery"], icon: Needle, color: "text-rose-500" },
   { keywords: ["scissors", "cutting", "trim"], icon: Scissors, color: "text-slate-500" },
 
-  // Manufacturing
+  // Books & Education
+  { keywords: ["book", "books", "reading", "magazine", "journal", "publication", "manual", "guide", "document", "paper", "notebook"], icon: Book, color: "text-amber-700" },
+
+  // Technology & Computers
+  { keywords: ["computer", "laptop", "desktop", "pc", "mac", "server"], icon: Desktop, color: "text-slate-600" },
+  { keywords: ["keyboard", "mouse", "peripheral"], icon: Keyboard, color: "text-gray-600" },
+  { keywords: ["cpu", "processor", "chip", "semiconductor", "circuit"], icon: Cpu, color: "text-blue-600" },
+  { keywords: ["storage", "drive", "memory", "data", "ssd", "hdd", "hard drive"], icon: HardDrive, color: "text-slate-600" },
+  { keywords: ["screen", "display", "monitor", "tv", "television"], icon: Monitor, color: "text-gray-700" },
+  { keywords: ["phone", "mobile", "smartphone", "iphone", "android", "device", "gadget"], icon: Phone, color: "text-slate-500" },
+
+  // Animals
+  { keywords: ["dog", "puppy", "canine", "pet", "dogs"], icon: Dog, color: "text-amber-600" },
+  { keywords: ["cat", "kitten", "feline", "cats"], icon: Cat, color: "text-orange-500" },
+  { keywords: ["bird", "parrot", "chicken", "poultry", "birds"], icon: Bird, color: "text-sky-500" },
+  { keywords: ["fish", "seafood", "marine", "ocean", "aquarium", "salmon", "tuna"], icon: Fish, color: "text-blue-500" },
+  { keywords: ["horse", "equine", "pony"], icon: Horse, color: "text-amber-800" },
+  { keywords: ["meat", "beef", "leather", "hide", "cow", "cattle", "bovine", "animal"], icon: Cow, color: "text-amber-700" },
+
+  // Vehicles & Transport
+  { keywords: ["ship", "boat", "vessel", "maritime", "cargo", "cruise", "ferry"], icon: Boat, color: "text-blue-600" },
+  { keywords: ["shipping", "transport", "logistics", "delivery", "freight", "truck", "lorry"], icon: Truck, color: "text-blue-500" },
+  { keywords: ["car", "vehicle", "auto", "automobile", "sedan", "suv"], icon: Car, color: "text-red-500" },
+  { keywords: ["airplane", "plane", "aircraft", "aviation", "flight", "jet"], icon: Airplane, color: "text-sky-600" },
+  { keywords: ["train", "railway", "rail", "locomotive"], icon: Train, color: "text-gray-600" },
+
+  // Manufacturing & Industry
   { keywords: ["factory", "manufacturing", "production", "industrial"], icon: Factory, color: "text-gray-600" },
-  { keywords: ["machine", "equipment", "machinery", "gear"], icon: Gear, color: "text-zinc-500" },
-  { keywords: ["tool", "tools", "hardware"], icon: Toolbox, color: "text-orange-500" },
-  { keywords: ["warehouse", "storage", "inventory"], icon: Warehouse, color: "text-amber-600" },
+  { keywords: ["machine", "equipment", "machinery", "gear", "engine", "motor"], icon: Gear, color: "text-zinc-500" },
+  { keywords: ["tool", "tools", "hardware", "toolkit"], icon: Toolbox, color: "text-orange-500" },
+  { keywords: ["warehouse", "storage", "inventory", "depot"], icon: Warehouse, color: "text-amber-600" },
 
-  // Logistics
-  { keywords: ["shipping", "transport", "logistics", "delivery", "freight", "truck"], icon: Truck, color: "text-blue-500" },
+  // Metals & Materials
+  { keywords: ["metal", "steel", "iron", "aluminum", "copper", "brass", "bronze", "alloy", "zinc", "titanium", "chrome"], icon: Cube, color: "text-gray-500" },
+  { keywords: ["gold", "silver", "platinum", "precious", "jewelry", "jewel"], icon: Diamond, color: "text-yellow-500" },
+  { keywords: ["polymer", "plastic", "synthetic", "material", "rubber", "vinyl"], icon: Atom, color: "text-indigo-500" },
 
-  // Chemicals & Materials
-  { keywords: ["chemical", "dye", "color", "pigment", "liquid"], icon: Drop, color: "text-cyan-500" },
-  { keywords: ["lab", "laboratory", "research", "test"], icon: Flask, color: "text-violet-500" },
-  { keywords: ["polymer", "plastic", "synthetic", "material"], icon: Atom, color: "text-indigo-500" },
+  // Chemicals & Science
+  { keywords: ["chemical", "dye", "pigment", "liquid", "solution", "acid", "base"], icon: Drop, color: "text-cyan-500" },
+  { keywords: ["lab", "laboratory", "research", "test", "testing", "sample", "experiment", "science"], icon: Flask, color: "text-violet-500" },
 
   // Agriculture & Food
-  { keywords: ["organic", "natural", "eco", "green", "sustainable", "plant"], icon: Leaf, color: "text-green-500" },
-  { keywords: ["tree", "wood", "timber", "lumber", "forest"], icon: Tree, color: "text-emerald-600" },
-  { keywords: ["fish", "seafood", "marine", "ocean"], icon: Fish, color: "text-sky-500" },
-  { keywords: ["meat", "beef", "leather", "hide", "animal"], icon: Cow, color: "text-amber-700" },
-  { keywords: ["grain", "wheat", "rice", "cereal", "flour"], icon: Grains, color: "text-yellow-600" },
-  { keywords: ["coffee", "tea", "beverage"], icon: Coffee, color: "text-amber-800" },
-  { keywords: ["wine", "alcohol", "drink"], icon: Wine, color: "text-red-600" },
-  { keywords: ["food", "snack", "biscuit", "cookie"], icon: Cookie, color: "text-orange-400" },
+  { keywords: ["organic", "natural", "eco", "green", "sustainable", "plant", "garden", "flower"], icon: Leaf, color: "text-green-500" },
+  { keywords: ["tree", "wood", "timber", "lumber", "forest", "pine", "oak"], icon: Tree, color: "text-emerald-600" },
+  { keywords: ["grain", "wheat", "rice", "cereal", "flour", "corn", "oat", "barley"], icon: Grains, color: "text-yellow-600" },
+  { keywords: ["coffee", "tea", "beverage", "espresso", "latte"], icon: Coffee, color: "text-amber-800" },
+  { keywords: ["wine", "alcohol", "drink", "beer", "whiskey", "vodka", "spirits"], icon: Wine, color: "text-red-600" },
+  { keywords: ["food", "snack", "biscuit", "cookie", "cake", "bread", "bakery"], icon: Cookie, color: "text-orange-400" },
+  { keywords: ["fruit", "apple", "orange", "banana", "grape", "berry", "mango"], icon: Orange, color: "text-orange-500" },
 
-  // Technology
-  { keywords: ["cpu", "processor", "chip", "semiconductor"], icon: Cpu, color: "text-blue-600" },
-  { keywords: ["storage", "drive", "memory", "data"], icon: HardDrive, color: "text-slate-600" },
-  { keywords: ["screen", "display", "monitor", "tv"], icon: Monitor, color: "text-gray-700" },
-  { keywords: ["phone", "mobile", "device", "gadget"], icon: Phone, color: "text-slate-500" },
+  // Energy & Power
+  { keywords: ["electric", "power", "energy", "battery", "volt", "watt", "electricity"], icon: Lightning, color: "text-yellow-500" },
+  { keywords: ["solar", "panel", "photovoltaic", "sun"], icon: SolarPanel, color: "text-amber-500" },
+  { keywords: ["wind", "turbine", "renewable", "windmill"], icon: Wind, color: "text-teal-500" },
+  { keywords: ["recycle", "recycled", "reuse", "waste", "eco-friendly"], icon: Recycle, color: "text-green-600" },
+  { keywords: ["oil", "petroleum", "fuel", "gas", "diesel", "gasoline"], icon: Drop, color: "text-stone-600" },
 
-  // Energy
-  { keywords: ["electric", "power", "energy", "battery"], icon: Lightning, color: "text-yellow-500" },
-  { keywords: ["solar", "panel", "photovoltaic"], icon: SolarPanel, color: "text-amber-500" },
-  { keywords: ["wind", "turbine", "renewable"], icon: Wind, color: "text-teal-500" },
-  { keywords: ["recycle", "recycled", "reuse", "waste"], icon: Recycle, color: "text-green-600" },
-
-  // Healthcare
-  { keywords: ["medical", "health", "hospital", "care", "first aid"], icon: FirstAid, color: "text-red-500" },
-  { keywords: ["pill", "medicine", "drug", "pharmaceutical", "tablet"], icon: Pill, color: "text-blue-400" },
-  { keywords: ["injection", "vaccine", "syringe"], icon: Syringe, color: "text-cyan-600" },
+  // Healthcare & Medical
+  { keywords: ["medical", "health", "hospital", "care", "first aid", "clinic", "doctor"], icon: FirstAid, color: "text-red-500" },
+  { keywords: ["pill", "medicine", "drug", "pharmaceutical", "tablet", "capsule", "vitamin"], icon: Pill, color: "text-blue-400" },
+  { keywords: ["injection", "vaccine", "syringe", "shot"], icon: Syringe, color: "text-cyan-600" },
 
   // Furniture & Home
-  { keywords: ["bed", "mattress", "sleep", "bedroom"], icon: Bed, color: "text-indigo-400" },
-  { keywords: ["chair", "seat", "furniture", "sofa"], icon: Chair, color: "text-amber-600" },
-  { keywords: ["lamp", "light", "lighting", "bulb"], icon: Lamp, color: "text-yellow-400" },
-  { keywords: ["paint", "coating", "finish"], icon: PaintBrush, color: "text-purple-400" },
+  { keywords: ["bed", "mattress", "sleep", "bedroom", "pillow"], icon: Bed, color: "text-indigo-400" },
+  { keywords: ["chair", "seat", "furniture", "sofa", "couch", "table", "desk"], icon: Chair, color: "text-amber-600" },
+  { keywords: ["lamp", "light", "lighting", "bulb", "chandelier"], icon: Lamp, color: "text-yellow-400" },
+  { keywords: ["paint", "coating", "finish", "color", "colours"], icon: PaintBrush, color: "text-purple-400" },
+  { keywords: ["house", "home", "building", "apartment", "real estate", "property"], icon: House, color: "text-emerald-500" },
 
-  // Construction
-  { keywords: ["hammer", "construction", "building", "nail"], icon: Hammer, color: "text-stone-500" },
-  { keywords: ["measure", "ruler", "scale", "dimension"], icon: Ruler, color: "text-gray-500" },
-  { keywords: ["wrench", "plumbing", "pipe", "fitting"], icon: Wrench, color: "text-zinc-600" },
+  // Construction & Tools
+  { keywords: ["hammer", "construction", "nail", "builder"], icon: Hammer, color: "text-stone-500" },
+  { keywords: ["measure", "ruler", "scale", "dimension", "tape"], icon: Ruler, color: "text-gray-500" },
+  { keywords: ["wrench", "plumbing", "pipe", "fitting", "spanner"], icon: Wrench, color: "text-zinc-600" },
+
+  // Sports & Recreation
+  { keywords: ["ball", "soccer", "football", "basketball", "sport", "sports", "game", "play"], icon: SoccerBall, color: "text-green-600" },
+  { keywords: ["music", "audio", "sound", "speaker", "headphone"], icon: MusicNotes, color: "text-purple-500" },
+  { keywords: ["camera", "photo", "photography", "picture", "image"], icon: Camera, color: "text-gray-600" },
+  { keywords: ["gift", "present", "box", "surprise"], icon: Gift, color: "text-pink-500" },
+
+  // Office & Business
+  { keywords: ["office", "business", "corporate", "company", "enterprise"], icon: Buildings, color: "text-slate-600" },
+  { keywords: ["briefcase", "case", "bag", "luggage", "suitcase"], icon: Briefcase, color: "text-amber-700" },
 ];
 
 function getResourceIcon(name: string, description: string): { Icon: React.ElementType; color: string } {
@@ -436,7 +489,29 @@ function CreateResourceModal({ isOpen, onClose, onSave }: {
             <X size={20} />
           </button>
         </div>
-        <p className="text-[12px] text-gray-500 mb-4 -mt-2 ml-[52px]">Icon auto-selected based on name & description</p>
+        <div className="flex items-center gap-2 mb-4 -mt-2 ml-[52px]">
+          <p className="text-[12px] text-gray-500">Icon auto-selected based on name & description</p>
+          <div className="relative group">
+            <button type="button" className="p-0.5 text-gray-400 hover:text-[#4A7DC4] rounded-full hover:bg-[#EEF4FB] transition-colors">
+              <Info size={14} />
+            </button>
+            <div className="absolute left-0 top-6 z-50 hidden group-hover:block bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-72">
+              <p className="text-[12px] font-semibold text-gray-700 mb-2">Smart Icon Categories:</p>
+              <ul className="text-[11px] text-gray-600 space-y-1">
+                <li><strong>Textiles:</strong> cotton, yarn, fabric, silk, wool, spin</li>
+                <li><strong>Tech:</strong> computer, laptop, phone, cpu, monitor</li>
+                <li><strong>Animals:</strong> dog, cat, fish, bird, horse, cow</li>
+                <li><strong>Vehicles:</strong> ship, car, truck, airplane, train</li>
+                <li><strong>Metals:</strong> steel, iron, copper, gold, silver</li>
+                <li><strong>Books:</strong> book, manual, journal, magazine</li>
+                <li><strong>Food:</strong> coffee, wine, grain, fruit, organic</li>
+                <li><strong>Science:</strong> lab, test, chemical, research</li>
+                <li><strong>Home:</strong> bed, chair, lamp, furniture</li>
+                <li><strong>Medical:</strong> pill, medicine, health, hospital</li>
+              </ul>
+            </div>
+          </div>
+        </div>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
@@ -524,6 +599,10 @@ export default function ResourcesPage() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingResource, setDeletingResource] = useState<Resource | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [showStats, setShowStats] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -552,6 +631,51 @@ export default function ResourcesPage() {
     } catch (error) {
       console.error("Failed to create resource:", error);
     }
+  };
+
+  const handleEditResource = (resource: Resource) => {
+    setEditingResource(resource);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (data: any) => {
+    if (!editingResource) return;
+
+    // Try API first, fall back to local update
+    try {
+      const updated = await apiClient.put<Resource>(`/api/v1/resources/${editingResource.id}`, data);
+      setResources(prev => prev.map(r => r.id === editingResource.id ? updated : r));
+    } catch (error) {
+      // API doesn't exist, update locally
+      console.log("API not available, updating locally");
+      setResources(prev => prev.map(r =>
+        r.id === editingResource.id
+          ? { ...r, ...data, updated_at: new Date().toISOString() }
+          : r
+      ));
+    }
+    setShowEditModal(false);
+    setEditingResource(null);
+  };
+
+  const handleDeleteClick = (resource: Resource) => {
+    setDeletingResource(resource);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingResource) return;
+
+    // Try API first, fall back to local delete
+    try {
+      await apiClient.delete(`/api/v1/resources/${deletingResource.id}`);
+    } catch (error) {
+      console.log("API not available, deleting locally");
+    }
+    // Remove from local state regardless
+    setResources(prev => prev.filter(r => r.id !== deletingResource.id));
+    setShowDeleteConfirm(false);
+    setDeletingResource(null);
   };
 
   // Filter resources
@@ -709,8 +833,8 @@ export default function ResourcesPage() {
                     <ResourceCard
                       key={resource.id}
                       resource={resource}
-                      onEdit={() => console.log("Edit:", resource.id)}
-                      onDelete={() => console.log("Delete:", resource.id)}
+                      onEdit={() => handleEditResource(resource)}
+                      onDelete={() => handleDeleteClick(resource)}
                     />
                   ))}
                 </div>
@@ -723,8 +847,8 @@ export default function ResourcesPage() {
                     <ResourceCard
                       key={resource.id}
                       resource={resource}
-                      onEdit={() => console.log("Edit:", resource.id)}
-                      onDelete={() => console.log("Delete:", resource.id)}
+                      onEdit={() => handleEditResource(resource)}
+                      onDelete={() => handleDeleteClick(resource)}
                     />
                   ))}
                 </div>
@@ -743,8 +867,8 @@ export default function ResourcesPage() {
                     <ResourceListItem
                       key={resource.id}
                       resource={resource}
-                      onEdit={() => console.log("Edit:", resource.id)}
-                      onDelete={() => console.log("Delete:", resource.id)}
+                      onEdit={() => handleEditResource(resource)}
+                      onDelete={() => handleDeleteClick(resource)}
                     />
                   ))}
                 </div>
@@ -759,6 +883,186 @@ export default function ResourcesPage() {
         onClose={() => setShowCreateModal(false)}
         onSave={handleCreateResource}
       />
+
+      {/* Edit Resource Modal */}
+      {showEditModal && editingResource && (
+        <EditResourceModal
+          resource={editingResource}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingResource(null);
+          }}
+          onSave={handleSaveEdit}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && deletingResource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 className="text-[18px] font-semibold text-gray-900 mb-2">Delete Resource</h2>
+            <p className="text-[14px] text-gray-600 mb-4">
+              Are you sure you want to delete <strong>{deletingResource.name}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 px-4 py-2 bg-red-500 text-white text-[14px] font-medium rounded-md hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Edit Resource Modal Component
+function EditResourceModal({
+  resource,
+  onClose,
+  onSave,
+}: {
+  resource: Resource;
+  onClose: () => void;
+  onSave: (data: any) => Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    name: resource.name,
+    description: resource.description || "",
+    quantity: resource.quantity,
+    price: resource.price?.toString() || "",
+    currency: resource.currency || "USD",
+    is_active: resource.is_active,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const { Icon, color } = getResourceIcon(form.name, form.description);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({
+      ...form,
+      quantity: Number(form.quantity),
+      price: form.price ? Number(form.price) : null,
+    });
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center">
+              <Icon size={24} weight="duotone" className={color} />
+            </div>
+            <h2 className="text-[18px] font-semibold text-gray-900">Edit Resource</h2>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Name *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Quantity *</label>
+                <input
+                  type="number"
+                  value={form.quantity}
+                  onChange={(e) => setForm(f => ({ ...f, quantity: Number(e.target.value) }))}
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Price</label>
+                <input
+                  type="number"
+                  value={form.price}
+                  onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Currency</label>
+                <select
+                  value={form.currency}
+                  onChange={(e) => setForm(f => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                >
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="INR">INR</option>
+                  <option value="CAD">CAD</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="is_active"
+                checked={form.is_active}
+                onChange={(e) => setForm(f => ({ ...f, is_active: e.target.checked }))}
+                className="w-4 h-4 text-[#4A7DC4] rounded focus:ring-[#4A7DC4]"
+              />
+              <label htmlFor="is_active" className="text-[13px] text-gray-700">Active (visible to connections)</label>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

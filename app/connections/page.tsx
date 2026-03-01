@@ -688,10 +688,25 @@ function AddContactModal({ isOpen, onClose, onAdd }: {
 // Main Page
 // =============================================================================
 
+// Local contact type (stored in localStorage)
+interface LocalContact {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  role: string;
+  phone: string;
+  notes: string;
+  created_at: string;
+}
+
+const LOCAL_CONTACTS_KEY = "netabridge_local_contacts";
+
 export default function ConnectionsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, logout: handleLogout } = useAuth();
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [localContacts, setLocalContacts] = useState<LocalContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -706,6 +721,27 @@ export default function ConnectionsPage() {
   useEffect(() => {
     if (!authLoading && !user) router.push("/login");
   }, [authLoading, user, router]);
+
+  // Hide stats by default on mobile
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setShowStats(false);
+    }
+  }, []);
+
+  // Load local contacts from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(LOCAL_CONTACTS_KEY);
+        if (stored) {
+          setLocalContacts(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error("Failed to load local contacts:", e);
+      }
+    }
+  }, []);
 
   // Fetch connections after auth is ready
   useEffect(() => {
@@ -754,11 +790,26 @@ export default function ConnectionsPage() {
 
   const handleAddContact = async (data: ContactFormData): Promise<{ success: boolean; error?: string }> => {
     try {
-      // POST to backend contacts endpoint (manual entry, no invite sent)
-      await apiClient.post("/api/v1/contacts", data);
-      // Refresh connections list to show new contact
-      const connData = await apiClient.get<Connection[]>("/api/v1/connections");
-      setConnections(Array.isArray(connData) ? connData : []);
+      // Save to local storage (no backend endpoint)
+      const newContact: LocalContact = {
+        id: `local_${Date.now()}`,
+        name: data.name,
+        email: data.email,
+        company: data.company,
+        role: data.role,
+        phone: data.phone,
+        notes: data.notes,
+        created_at: new Date().toISOString(),
+      };
+
+      const updatedContacts = [...localContacts, newContact];
+      setLocalContacts(updatedContacts);
+
+      // Persist to localStorage
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LOCAL_CONTACTS_KEY, JSON.stringify(updatedContacts));
+      }
+
       return { success: true };
     } catch (error: any) {
       console.error("Failed to add contact:", error);
@@ -766,8 +817,29 @@ export default function ConnectionsPage() {
     }
   };
 
+  // Convert local contacts to Connection format for unified display
+  const localContactsAsConnections: Connection[] = localContacts.map(c => ({
+    id: c.id,
+    requester_id: user?.id || "",
+    target_id: c.id,
+    status: "ACCEPTED" as const,
+    created_at: c.created_at,
+    updated_at: c.created_at,
+    user: {
+      id: c.id,
+      email: c.email,
+      display_name: c.name,
+    },
+    // Extra fields for local contacts
+    _isLocal: true,
+    _localData: c,
+  })) as (Connection & { _isLocal?: boolean; _localData?: LocalContact })[];
+
+  // Merge API connections with local contacts
+  const allConnections = [...connections, ...localContactsAsConnections];
+
   // Filter connections
-  const filteredConnections = connections.filter(c => {
+  const filteredConnections = allConnections.filter(c => {
     if (statusFilter !== "all" && c.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -779,14 +851,14 @@ export default function ConnectionsPage() {
   });
 
   // Stats
-  const pendingCount = connections.filter(c => c.status === "PENDING").length;
-  const acceptedCount = connections.filter(c => c.status === "ACCEPTED").length;
+  const pendingCount = allConnections.filter(c => c.status === "PENDING").length;
+  const acceptedCount = allConnections.filter(c => c.status === "ACCEPTED").length;
 
   // Calculate "new this month" from actual data
   const thisMonth = new Date();
   thisMonth.setDate(1);
   thisMonth.setHours(0, 0, 0, 0);
-  const newThisMonth = connections.filter(c => {
+  const newThisMonth = allConnections.filter(c => {
     const created = new Date(c.created_at);
     return c.status === "ACCEPTED" && created >= thisMonth;
   }).length;

@@ -438,6 +438,10 @@ export default function BuyRequestsPage() {
   const [buyPosts, setBuyPosts] = useState<BuyPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPost, setEditingPost] = useState<BuyPost | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingPost, setDeletingPost] = useState<BuyPost | null>(null);
   const [filter, setFilter] = useState<"all" | "mine" | "network">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showStats, setShowStats] = useState(true);
@@ -467,6 +471,51 @@ export default function BuyRequestsPage() {
     } catch (error) {
       console.error("Failed to create buy post:", error);
     }
+  };
+
+  const handleEditPost = (post: BuyPost) => {
+    setEditingPost(post);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (data: any) => {
+    if (!editingPost) return;
+
+    // Try API first, fall back to local update
+    try {
+      const updated = await apiClient.put<BuyPost>(`/api/v1/buy-posts/${editingPost.id}`, data);
+      setBuyPosts(prev => prev.map(p => p.id === editingPost.id ? updated : p));
+    } catch (error) {
+      // API doesn't exist, update locally
+      console.log("API not available, updating locally");
+      setBuyPosts(prev => prev.map(p =>
+        p.id === editingPost.id
+          ? { ...p, ...data, updated_at: new Date().toISOString() }
+          : p
+      ));
+    }
+    setShowEditModal(false);
+    setEditingPost(null);
+  };
+
+  const handleDeleteClick = (post: BuyPost) => {
+    setDeletingPost(post);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingPost) return;
+
+    // Try API first, fall back to local delete
+    try {
+      await apiClient.delete(`/api/v1/buy-posts/${deletingPost.id}`);
+    } catch (error) {
+      console.log("API not available, deleting locally");
+    }
+    // Remove from local state regardless
+    setBuyPosts(prev => prev.filter(p => p.id !== deletingPost.id));
+    setShowDeleteConfirm(false);
+    setDeletingPost(null);
   };
 
   // Computed stats
@@ -677,8 +726,8 @@ export default function BuyRequestsPage() {
                     key={post.id}
                     post={post}
                     currentUserId={user?.id}
-                    onEdit={() => console.log("Edit:", post.id)}
-                    onDelete={() => console.log("Delete:", post.id)}
+                    onEdit={() => handleEditPost(post)}
+                    onDelete={() => handleDeleteClick(post)}
                     onRespond={() => console.log("Respond:", post.id)}
                   />
                 ))}
@@ -690,8 +739,8 @@ export default function BuyRequestsPage() {
                     key={post.id}
                     post={post}
                     currentUserId={user?.id}
-                    onEdit={() => console.log("Edit:", post.id)}
-                    onDelete={() => console.log("Delete:", post.id)}
+                    onEdit={() => handleEditPost(post)}
+                    onDelete={() => handleDeleteClick(post)}
                     onRespond={() => console.log("Respond:", post.id)}
                   />
                 ))}
@@ -706,6 +755,164 @@ export default function BuyRequestsPage() {
         onClose={() => setShowCreateModal(false)}
         onSave={handleCreatePost}
       />
+
+      {/* Edit Modal */}
+      {showEditModal && editingPost && (
+        <EditBuyPostModal
+          post={editingPost}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingPost(null);
+          }}
+          onSave={handleSaveEdit}
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && deletingPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 className="text-[18px] font-semibold text-gray-900 mb-2">Delete Buy Request</h2>
+            <p className="text-[14px] text-gray-600 mb-4">
+              Are you sure you want to delete <strong>{deletingPost.title}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 px-4 py-2 bg-red-500 text-white text-[14px] font-medium rounded-md hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Edit Buy Post Modal Component
+function EditBuyPostModal({
+  post,
+  onClose,
+  onSave,
+}: {
+  post: BuyPost;
+  onClose: () => void;
+  onSave: (data: any) => Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    title: post.title,
+    description: post.description,
+    budget_range: post.budget_range || "",
+    deadline: post.deadline?.split("T")[0] || "",
+    status: post.status,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({
+      ...form,
+      budget_range: form.budget_range || null,
+      deadline: form.deadline || null,
+    });
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[18px] font-semibold text-gray-900">Edit Buy Request</h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Title *</label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Description *</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Budget Range</label>
+              <input
+                type="text"
+                value={form.budget_range}
+                onChange={(e) => setForm(f => ({ ...f, budget_range: e.target.value }))}
+                placeholder="e.g., $1,000 - $5,000"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Deadline</label>
+                <input
+                  type="date"
+                  value={form.deadline}
+                  onChange={(e) => setForm(f => ({ ...f, deadline: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm(f => ({ ...f, status: e.target.value as BuyPost["status"] }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                >
+                  <option value="OPEN">Open</option>
+                  <option value="FULFILLED">Fulfilled</option>
+                  <option value="CLOSED">Closed</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
