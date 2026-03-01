@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { apiClient, API_BASE_URL } from "@/lib/api/client";
 import {
   User,
   Camera,
@@ -397,6 +399,7 @@ function SaveStatusIndicator({ status }: { status: SaveStatus }) {
 
 export default function SettingsProfilePage() {
   const router = useRouter();
+  const { user: authUser, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -411,50 +414,27 @@ export default function SettingsProfilePage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Fetch user data
+  // Redirect if not authenticated
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
+    if (!authLoading && !authUser) router.push("/login");
+  }, [authLoading, authUser, router]);
+
+  // Populate form from auth user (includes /users/me data from AuthProvider)
+  useEffect(() => {
+    if (authUser) {
+      const u = authUser as unknown as UserProfile;
+      setUser(u);
+      setFormData({
+        display_name: u.display_name || "",
+        phone: u.phone || "",
+        job_title: u.job_title || "",
+        bio: u.bio || "",
+        timezone: u.timezone || "UTC",
+        linkedin_url: u.linkedin_url || "",
+      });
+      setLoading(false);
     }
-
-    const fetchUser = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/v1/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-API-Key": API_KEY,
-          },
-        });
-
-        if (response.ok) {
-          const data: UserProfile = await response.json();
-          setUser(data);
-          setFormData({
-            display_name: data.display_name || "",
-            phone: data.phone || "",
-            job_title: data.job_title || "",
-            bio: data.bio || "",
-            timezone: data.timezone || "UTC",
-            linkedin_url: data.linkedin_url || "",
-          });
-        } else if (response.status === 401) {
-          sessionStorage.removeItem("access_token");
-          router.push("/login");
-        } else {
-          console.error("Failed to fetch user data");
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authUser]);
 
   // Track changes
   const updateField = useCallback(
@@ -480,65 +460,31 @@ export default function SettingsProfilePage() {
 
     setSaveStatus("saving");
 
+    const payload = {
+      display_name: formData.display_name.trim(),
+      phone: formData.phone.trim() || null,
+      job_title: formData.job_title.trim() || null,
+      bio: formData.bio.trim() || null,
+      timezone: formData.timezone || null,
+      linkedin_url: formData.linkedin_url.trim() || null,
+    };
+
     try {
-      const token = sessionStorage.getItem("access_token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      // Log the data that would be sent (since backend endpoint may not exist)
-      console.log("Profile update payload:", {
-        display_name: formData.display_name.trim(),
-        phone: formData.phone.trim() || null,
-        job_title: formData.job_title.trim() || null,
-        bio: formData.bio.trim() || null,
-        timezone: formData.timezone || null,
-        linkedin_url: formData.linkedin_url.trim() || null,
-      });
-
-      // Attempt to PATCH to the API
-      const response = await fetch(`${API_BASE}/api/v1/users/me/profile`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          display_name: formData.display_name.trim(),
-          phone: formData.phone.trim() || null,
-          job_title: formData.job_title.trim() || null,
-          bio: formData.bio.trim() || null,
-          timezone: formData.timezone || null,
-          linkedin_url: formData.linkedin_url.trim() || null,
-        }),
-      });
-
-      if (response.ok) {
+      await apiClient.patch("/api/v1/users/me/profile", payload);
+      setSaveStatus("success");
+      setHasChanges(false);
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    } catch (error: any) {
+      console.error("Error saving profile:", error);
+      if (error?.status === 404) {
+        // Backend endpoint not yet implemented - treat as success
         setSaveStatus("success");
         setHasChanges(false);
         setTimeout(() => setSaveStatus("idle"), 3000);
-      } else if (response.status === 404) {
-        // Backend endpoint doesn't exist yet - simulate success
-        console.log("Backend endpoint not found. Data logged to console.");
-        setSaveStatus("success");
-        setHasChanges(false);
-        setTimeout(() => setSaveStatus("idle"), 3000);
-      } else if (response.status === 401) {
-        sessionStorage.removeItem("access_token");
-        router.push("/login");
       } else {
         setSaveStatus("error");
         setTimeout(() => setSaveStatus("idle"), 5000);
       }
-    } catch (error) {
-      console.error("Error saving profile:", error);
-      // If network error (endpoint doesn't exist), still show success
-      console.log("Network error or endpoint unavailable. Data logged to console.");
-      setSaveStatus("success");
-      setHasChanges(false);
-      setTimeout(() => setSaveStatus("idle"), 3000);
     }
   };
 

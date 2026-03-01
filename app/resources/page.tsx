@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { apiClient } from "@/lib/api/client";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
@@ -505,7 +507,7 @@ function CreateResourceModal({ isOpen, onClose, onSave }: {
 
 export default function ResourcesPage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserType | null>(null);
+  const { user, isLoading: authLoading, logout: handleLogout } = useAuth();
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -514,71 +516,25 @@ export default function ResourcesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
+  // Redirect if not authenticated
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!authLoading && !user) router.push("/login");
+  }, [authLoading, user, router]);
 
-    const fetchData = async () => {
-      try {
-        const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-        const userRes = await fetch(`/api/v1/users/me`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (userRes.ok) {
-          setUser(await userRes.json());
-        } else if (userRes.status === 401) {
-          sessionStorage.removeItem("access_token");
-          router.push("/login");
-          return;
-        }
-
-        const resourcesRes = await fetch(`/api/v1/resources`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (resourcesRes.ok) {
-          const data = await resourcesRes.json();
-          setResources(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("user_oid");
-    router.push("/login");
-  };
+  // Fetch resources after auth is ready
+  useEffect(() => {
+    if (!user) return;
+    apiClient
+      .get<Resource[]>("/api/v1/resources")
+      .then((data) => setResources(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user]);
 
   const handleCreateResource = async (data: any) => {
     try {
-      const token = sessionStorage.getItem("access_token");
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      const res = await fetch(`/api/v1/resources`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (res.ok) {
-        const newResource = await res.json();
-        setResources(prev => [newResource, ...prev]);
-      }
+      const newResource = await apiClient.post<Resource>("/api/v1/resources", data);
+      setResources(prev => [newResource, ...prev]);
     } catch (error) {
       console.error("Failed to create resource:", error);
     }

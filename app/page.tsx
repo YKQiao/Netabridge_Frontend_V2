@@ -3,27 +3,30 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { isPreviewMode } from "@/lib/auth/previewMode";
-import { getAccessToken } from "@/lib/auth/AuthProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
+/**
+ * Root route – immediately redirect to /dashboard (authenticated) or
+ * /login (unauthenticated).  We wait for the AuthProvider to finish its
+ * initial /auth/me check before acting so we don't flash a redirect.
+ */
 export default function Home() {
   const router = useRouter();
+  const { isLoading, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    // Check if user has a valid token
-    const token = getAccessToken();
-    const isAuthenticated = isPreviewMode || !!token;
-
-    if (isAuthenticated) {
-      router.push("/dashboard");
-    } else {
-      router.push("/login");
+    if (isPreviewMode) {
+      router.replace("/dashboard");
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!isLoading) {
+      router.replace(isAuthenticated ? "/dashboard" : "/login");
+    }
+  }, [isLoading, isAuthenticated, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-gray-500">Loading...</div>
+      <div className="animate-pulse text-gray-400 text-sm">Loading…</div>
     </div>
   );
 }

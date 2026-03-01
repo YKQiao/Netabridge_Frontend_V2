@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { apiClient } from "@/lib/api/client";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
@@ -462,7 +464,7 @@ function InviteModal({ isOpen, onClose, onInvite, userEmail }: {
 
 export default function ConnectionsPage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserType | null>(null);
+  const { user, isLoading: authLoading, logout: handleLogout } = useAuth();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
@@ -471,108 +473,40 @@ export default function ConnectionsPage() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showStats, setShowStats] = useState(true);
 
+  // Redirect if not authenticated
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!authLoading && !user) router.push("/login");
+  }, [authLoading, user, router]);
 
-    const fetchData = async () => {
-      try {
-        const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-        // Fetch user
-        const userRes = await fetch(`/api/v1/users/me`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (userRes.ok) {
-          setUser(await userRes.json());
-        } else if (userRes.status === 401) {
-          sessionStorage.removeItem("access_token");
-          router.push("/login");
-          return;
-        }
-
-        // Fetch connections
-        const connRes = await fetch(`/api/v1/connections`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (connRes.ok) {
-          const data = await connRes.json();
-          setConnections(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("user_oid");
-    router.push("/login");
-  };
+  // Fetch connections after auth is ready
+  useEffect(() => {
+    if (!user) return;
+    apiClient
+      .get<Connection[]>("/api/v1/connections")
+      .then((data) => setConnections(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user]);
 
   const handleInvite = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const token = sessionStorage.getItem("access_token");
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      const res = await fetch(`/api/v1/connections/invite`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ target_email: email }),
-      });
-
-      if (res.ok) {
-        // Refresh connections
-        const connRes = await fetch(`/api/v1/connections`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (connRes.ok) {
-          setConnections(await connRes.json());
-        }
-        return { success: true };
-      } else {
-        const data = await res.json().catch(() => ({}));
-        return { success: false, error: data.detail || "Failed to send invite" };
-      }
-    } catch (error) {
+      await apiClient.post("/api/v1/connections/invite", { target_email: email });
+      // Refresh connections
+      const data = await apiClient.get<Connection[]>("/api/v1/connections");
+      setConnections(Array.isArray(data) ? data : []);
+      return { success: true };
+    } catch (error: any) {
       console.error("Failed to send invite:", error);
-      return { success: false, error: "Network error. Please try again." };
+      return { success: false, error: error.message || "Failed to send invite" };
     }
   };
 
   const handleAccept = async (connectionId: string) => {
     try {
-      const token = sessionStorage.getItem("access_token");
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      const res = await fetch(`/api/v1/connections/${connectionId}/respond`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action: "ACCEPTED" }),
-      });
-
-      if (res.ok) {
-        setConnections(prev =>
-          prev.map(c => c.id === connectionId ? { ...c, status: "ACCEPTED" } : c)
-        );
-      }
+      await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "ACCEPTED" });
+      setConnections(prev =>
+        prev.map(c => c.id === connectionId ? { ...c, status: "ACCEPTED" } : c)
+      );
     } catch (error) {
       console.error("Failed to accept:", error);
     }
@@ -580,24 +514,10 @@ export default function ConnectionsPage() {
 
   const handleReject = async (connectionId: string) => {
     try {
-      const token = sessionStorage.getItem("access_token");
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      const res = await fetch(`/api/v1/connections/${connectionId}/respond`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action: "REJECTED" }),
-      });
-
-      if (res.ok) {
-        setConnections(prev =>
-          prev.map(c => c.id === connectionId ? { ...c, status: "REJECTED" } : c)
-        );
-      }
+      await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "REJECTED" });
+      setConnections(prev =>
+        prev.map(c => c.id === connectionId ? { ...c, status: "REJECTED" } : c)
+      );
     } catch (error) {
       console.error("Failed to reject:", error);
     }

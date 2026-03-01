@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
-import { isPreviewMode, DEMO_USER } from "@/lib/auth/previewMode";
 import {
   House,
   Robot,
@@ -41,7 +40,7 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
-import { clearAuth } from "@/lib/auth/AuthProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 // =============================================================================
 // Types
@@ -809,62 +808,19 @@ function AIAssistantTrigger({ onClick }: { onClick: () => void }) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading: loading, logout } = useAuth();
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
+  // Redirect to login if not authenticated after loading completes
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
+    if (!loading && !user) {
       router.push("/login");
-      return;
     }
+  }, [loading, user, router]);
 
-    // In preview mode, use demo user directly
-    if (isPreviewMode) {
-      setUser(DEMO_USER);
-      setLoading(false);
-      return;
-    }
-
-    // INSTANT: Decode JWT synchronously to show dashboard immediately
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const email = payload.email || payload.sub || "user@example.com";
-      setUser({
-        id: payload.oid || payload.sub || "unknown",
-        display_name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-        email: email,
-      });
-      setLoading(false); // Show dashboard IMMEDIATELY
-    } catch {
-      // Token decode failed - clear and redirect
-      sessionStorage.removeItem("access_token");
-      router.push("/login");
-      return;
-    }
-
-    // BACKGROUND: Fetch full user data (updates silently, no loading spinner)
-    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-    fetch(`/api/v1/users/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-API-Key": API_KEY,
-      },
-    })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => data && setUser(data))
-      .catch(() => {}); // Silent fail - we already have user from JWT
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleLogout = () => {
-    clearAuth();
-    router.push("/login");
-  };
+  const handleLogout = logout;
 
   if (loading) {
     return <BrandedLoading context="dashboard" />;

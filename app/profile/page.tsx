@@ -24,6 +24,7 @@ import {
   Package,
 } from "@phosphor-icons/react";
 import { LogoWithName } from "@/components/ui/Logo";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 // =============================================================================
 // Types
@@ -343,51 +344,11 @@ function ProfileCard({ user }: { user: UserProfile | null }) {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading: loading, logout: handleLogout } = useAuth();
 
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    const fetchUser = async () => {
-      try {
-        // Use Next.js proxy (bypasses CORS)
-        const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-        const response = await fetch(`/api/v1/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-API-Key": API_KEY,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setUser(data);
-        } else if (response.status === 401) {
-          sessionStorage.removeItem("access_token");
-          router.push("/login");
-        }
-      } catch (error) {
-        console.error("Failed to fetch user:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("user_oid");
-    router.push("/login");
-  };
+    if (!loading && !user) router.push("/login");
+  }, [loading, user, router]);
 
   if (loading) {
     return (

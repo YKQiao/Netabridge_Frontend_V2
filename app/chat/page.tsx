@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { apiClient, API_BASE_URL, API_KEY, getBearerToken } from "@/lib/api/client";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
@@ -409,8 +411,7 @@ function SuggestedPrompts({ onSelect }: { onSelect: (prompt: string) => void }) 
 
 export default function ChatPage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserType | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading: loading, logout: handleLogout } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -428,71 +429,22 @@ export default function ChatPage() {
   }, [messages, isThinking]);
 
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    const fetchData = async () => {
-      try {
-        const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-        const userRes = await fetch(`/api/v1/users/me`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (userRes.ok) {
-          setUser(await userRes.json());
-        } else if (userRes.status === 401) {
-          sessionStorage.removeItem("access_token");
-          router.push("/login");
-          return;
-        }
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("user_oid");
-    router.push("/login");
-  };
+    if (!loading && !user) router.push("/login");
+  }, [loading, user, router]);
 
   const createSession = async () => {
     try {
-      const token = sessionStorage.getItem("access_token");
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      const res = await fetch(`/api/v1/chat/sessions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ title: "New Chat" }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const newSession: ChatSession = {
-          id: data.session_id,
-          title: "New Chat",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setSessions(prev => [newSession, ...prev]);
-        setCurrentSession(newSession);
-        setMessages([]);
-        return newSession;
-      }
+      const data = await apiClient.post<{ session_id: string }>("/api/v1/chat/sessions", { title: "New Chat" });
+      const newSession: ChatSession = {
+        id: data.session_id,
+        title: "New Chat",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setSessions(prev => [newSession, ...prev]);
+      setCurrentSession(newSession);
+      setMessages([]);
+      return newSession;
     } catch (error) {
       console.error("Failed to create session:", error);
     }
@@ -521,13 +473,13 @@ export default function ChatPage() {
     setIsThinking(true);
 
     try {
-      const token = sessionStorage.getItem("access_token");
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+      const bearerToken = getBearerToken();
 
-      const res = await fetch(`/api/v1/chat/sessions/${session.id}/messages?stream=true`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${session.id}/messages?stream=true`, {
         method: "POST",
+        credentials: "include",
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
           "X-API-Key": API_KEY,
           "Content-Type": "application/json",
         },

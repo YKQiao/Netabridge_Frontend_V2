@@ -5,7 +5,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import AuthLayout from "@/components/AuthLayout";
 import { validateEmail } from "@/lib/passwordValidation";
-import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
+import { Envelope, ArrowLeft, CheckCircle } from "@phosphor-icons/react";
+import { API_BASE_URL, API_KEY } from "@/lib/api/client";
 
 const ButtonParticles = dynamic(() => import("@/components/ButtonParticles"), {
   ssr: false,
@@ -30,10 +31,7 @@ export default function ForgotPasswordPage() {
     setError("");
 
     try {
-      const API_BASE = "";
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      const response = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
+      await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58,7 +56,7 @@ export default function ForgotPasswordPage() {
         <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border-light)] p-6 shadow-sm animate-scale-fade">
           <div className="flex justify-center mb-4">
             <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+              <CheckCircle size={24} weight="fill" className="text-green-600" />
             </div>
           </div>
 
@@ -88,7 +86,7 @@ export default function ForgotPasswordPage() {
       <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border-light)] p-6 shadow-sm animate-scale-fade">
         <div className="flex justify-center mb-4">
           <div className="w-12 h-12 rounded-full bg-[var(--brand-100)] flex items-center justify-center">
-            <Mail className="w-6 h-6 text-[var(--brand-500)]" />
+            <Envelope size={24} weight="duotone" className="text-[var(--brand-500)]" />
           </div>
         </div>
 

@@ -1,9 +1,28 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+/**
+ * Login page
+ * ==========
+ * Production: "Continue with Microsoft" redirects the browser to the backend's
+ * /auth/login endpoint, which initiates the Entra External ID OAuth flow.
+ * The backend sets an HttpOnly `idealring_session` cookie on completion and
+ * redirects the browser back to /dashboard.
+ *
+ * Dev mode (ENTRA_CLIENT_ID unset / placeholder):
+ * An email / password form is shown that calls POST /auth/dev/login and
+ * stores the returned JWT in memory via setAccessToken().  The AuthProvider
+ * then picks up the token and resolves the user via /auth/me.
+ */
+
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isPreviewMode } from "@/lib/auth/previewMode";
-import { AUTH_ENDPOINTS, setAccessToken, getAccessToken } from "@/lib/auth/AuthProvider";
+import {
+  AUTH_ENDPOINTS,
+  setAccessToken,
+  useAuth,
+} from "@/lib/auth/AuthProvider";
+import { API_BASE_URL, API_KEY } from "@/lib/api/client";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import AuthLayout from "@/components/AuthLayout";
@@ -13,237 +32,145 @@ const ButtonParticles = dynamic(() => import("@/components/ButtonParticles"), {
   ssr: false,
 });
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Whether the app is configured with a real Entra client ID. */
+function isEntraConfigured(): boolean {
+  const id = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID ?? "";
+  return id.length > 0 && id !== "00000000-0000-0000-0000-000000000000";
+}
+
+// ---------------------------------------------------------------------------
+// Inner component (uses useSearchParams – must be inside Suspense)
+// ---------------------------------------------------------------------------
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isLoading, isAuthenticated, refreshUser } = useAuth();
 
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [formReady, setFormReady] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isDev, setIsDev] = useState(false);
-  const [showPasswordField, setShowPasswordField] = useState(false);
-  const [accountExists, setAccountExists] = useState(false);
-  const checkEmailRef = useRef<string>("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Handle OAuth callback - check for token in URL params
+  // Is Entra configured? If not, show dev-mode email/pass form.
+  const devMode = !isEntraConfigured();
+
+  // ------------------------------------------------------------------
+  // On mount: handle OAuth error/expired params
+  // ------------------------------------------------------------------
   useEffect(() => {
-    // Preview mode - redirect to dashboard
     if (isPreviewMode) {
-      router.push("/dashboard");
-      return;
-    }
-
-    // Check if we already have a token
-    const existingToken = getAccessToken();
-    if (existingToken) {
-      router.push("/dashboard");
-      return;
-    }
-
-    // Check for token from OAuth callback
-    const token = searchParams.get("token");
-    const authError = searchParams.get("error");
-
-    if (token) {
-      setAccessToken(token);
-      // Clean URL and redirect
       router.replace("/dashboard");
       return;
     }
-
-    if (authError) {
-      setError(decodeURIComponent(authError));
-    }
-
-    // Check if we're in dev mode
-    const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID;
-    setIsDev(!clientId || clientId === "00000000-0000-0000-0000-000000000000");
-
-    // Done checking - show login form
-    setCheckingAuth(false);
+    const authError = searchParams.get("error");
+    if (authError) setError(decodeURIComponent(authError));
+    if (searchParams.get("expired") === "1")
+      setError("Your session has expired. Please sign in again.");
+    setFormReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show loading while checking auth
-  if (checkingAuth) {
-    return <BrandedLoading context="auth" />;
-  }
+  // Redirect once AuthProvider confirms session
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) router.replace("/dashboard");
+  }, [isLoading, isAuthenticated, router]);
 
-  // Microsoft login - redirect to backend OAuth endpoint
+  if (!formReady || isLoading) return <BrandedLoading context="auth" />;
+
+  // ------------------------------------------------------------------
+  // Production: Microsoft SSO
+  // ------------------------------------------------------------------
   const handleMicrosoftLogin = () => {
-    setLoading(true);
+    setSubmitting(true);
     setError("");
-
-    // Get the API base URL and key
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY || "";
-
-    // Redirect to backend's Microsoft OAuth endpoint
-    // Backend will handle MS OAuth and redirect back with token
-    const redirectUri = encodeURIComponent(window.location.origin + "/login");
-    window.location.href = `${apiUrl}${AUTH_ENDPOINTS.microsoftLogin}?redirect_uri=${redirectUri}&api_key=${apiKey}`;
+    window.location.href = `${API_BASE_URL}${AUTH_ENDPOINTS.microsoftLogin}`;
   };
 
-  // Check if email exists when user finishes typing
-  const handleEmailBlur = async () => {
-    if (!email) return;
-    setShowPasswordField(true);
+  const handleGoogleLogin = () => {
+    setSubmitting(true);
+    setError("");
+    window.location.href = `${API_BASE_URL}${AUTH_ENDPOINTS.microsoftLogin}?domain_hint=google.com`;
+  };
 
-    // In dev mode, skip account check
-    if (isDev) {
-      setAccountExists(false);
-      return;
-    }
+  // ------------------------------------------------------------------
+  // Dev mode: email / password
+  // ------------------------------------------------------------------
+  const handleEmailBlur = () => {
+    if (email.trim()) setShowPassword(true);
+  };
 
-    // Track current email to prevent race conditions
-    const currentEmail = email;
-    checkEmailRef.current = currentEmail;
+  const handleDevLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) { setError("Please enter your email address."); return; }
+
+    setSubmitting(true);
+    setError("");
 
     try {
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+      const url = new URL(`${API_BASE_URL}${AUTH_ENDPOINTS.devLogin}`);
+      url.searchParams.set("email", trimmedEmail);
 
-      const response = await fetch(`/api/v1/auth/check-account`, {
+      const res = await fetch(url.toString(), {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Key": API_KEY,
+          ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
         },
-        body: JSON.stringify({ email: currentEmail }),
+        body: JSON.stringify({ email: trimmedEmail, password: password || undefined }),
       });
 
-      // Only update state if this is still the current check
-      if (checkEmailRef.current !== currentEmail) return;
-
-      if (response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setAccountExists(data.account_exists || false);
-      }
-    } catch {
-      // Endpoint not available, assume dev mode behavior
-    }
-  };
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
-      setError("Please enter your email address");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      // If password provided, try login
-      if (password) {
-        const response = await fetch(AUTH_ENDPOINTS.login, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": API_KEY,
-          },
-          body: JSON.stringify({ email, password }),
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            throw new Error("Invalid email or password");
-          }
-          throw new Error("Authentication failed");
-        }
-
-        const data = await response.json();
-        sessionStorage.setItem("access_token", data.access_token);
-        if (data.user_oid) {
-          sessionStorage.setItem("user_oid", data.user_oid);
-        }
-        router.push("/dashboard");
-        return;
-      }
-
-      // Dev mode fallback (no password required)
-      if (isDev) {
-        const response = await fetch(
-          `${AUTH_ENDPOINTS.devLogin}?email=${encodeURIComponent(email)}`,
-          {
-            method: "POST",
-            headers: { "X-API-Key": API_KEY },
-          }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          res.status === 401
+            ? "Invalid email or password."
+            : ((data as Record<string, unknown>)?.detail as string) ?? "Authentication failed.",
         );
-
-        if (!response.ok) {
-          throw new Error("Authentication failed");
-        }
-
-        const data = await response.json();
-        sessionStorage.setItem("access_token", data.access_token);
-        sessionStorage.setItem("user_oid", data.user_oid);
-
-        // Sync user data
-        try {
-          await fetch(AUTH_ENDPOINTS.sync, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${data.access_token}`,
-              "X-API-Key": API_KEY,
-            },
-            body: JSON.stringify({
-              email: email,
-              display_name: email
-                .split("@")[0]
-                .replace(/[._]/g, " ")
-                .replace(/\b\w/g, (c) => c.toUpperCase()),
-            }),
-          });
-        } catch (syncError) {
-          console.warn("User sync failed:", syncError);
-        }
-
-        router.push("/dashboard");
-        return;
       }
 
-      // Account doesn't exist - redirect to signup
-      if (!accountExists) {
-        setError("No account found with this email. Please sign up first.");
-        setLoading(false);
-        return;
-      }
+      const data = await res.json();
+      setAccessToken(data.access_token);
 
-      // Account exists but no password entered
-      if (!password) {
-        setError("Please enter your password");
-        setLoading(false);
-        return;
-      }
-    } catch (err: any) {
-      console.error("Login failed:", err);
+      // Sync profile (upsert in DB)
+      const displayName = trimmedEmail
+        .split("@")[0]
+        .replace(/[._-]/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
 
-      let friendlyMessage = "Unable to sign in. Please try again.";
+      await fetch(`${API_BASE_URL}${AUTH_ENDPOINTS.sync}`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${data.access_token}`,
+          ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+        },
+        body: JSON.stringify({ email: trimmedEmail, display_name: displayName }),
+      }).catch(() => { });
 
-      if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
-        friendlyMessage = "Unable to connect to server. Please check your connection.";
-      } else if (err.message?.includes("Invalid email or password")) {
-        friendlyMessage = "Invalid email or password.";
-      } else if (err.message?.includes("404")) {
-        friendlyMessage = "Service unavailable. Please try again later.";
-      }
-
-      setError(friendlyMessage);
+      await refreshUser();
+      router.replace("/dashboard");
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : "";
+      let friendly = "Unable to sign in. Please try again.";
+      if (raw.includes("Failed to fetch") || raw.includes("ERR_CONNECTION_REFUSED"))
+        friendly = "Cannot reach the server. Is the backend running?";
+      else if (raw.length > 0 && raw.length < 120)
+        friendly = raw;
+      setError(friendly);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
-
-  // Show loading for preview mode or OAuth redirect
-  if (isPreviewMode || loading) {
-    return <BrandedLoading context="login" />;
-  }
 
   return (
     <AuthLayout variant="login">
@@ -263,119 +190,107 @@ function LoginContent() {
           </div>
         )}
 
-        {/* SSO Buttons */}
-        <div className="space-y-3 mb-4 animate-stagger">
-          <button
-            disabled
-            className="w-full h-10 flex items-center justify-center gap-2 border border-[var(--border-default)] text-[var(--text-muted)] text-sm font-medium rounded-md cursor-not-allowed relative bg-[var(--bg-card)] btn-click"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 23 23">
-              <path fill="#9CA3AF" d="M1 1h10v10H1z" />
-              <path fill="#9CA3AF" d="M12 1h10v10H12z" />
-              <path fill="#9CA3AF" d="M1 12h10v10H1z" />
-              <path fill="#9CA3AF" d="M12 12h10v10H12z" />
-            </svg>
-            Continue with Microsoft
-            <span className="absolute right-3 text-[10px] bg-[var(--gray-200)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">
-              Soon
-            </span>
-          </button>
+        {/* ── Production mode: SSO buttons ── */}
+        {!devMode && (
+          <div className="space-y-3 mb-5 animate-stagger">
+            {/* Microsoft – fully functional */}
+            <button
+              onClick={handleMicrosoftLogin}
+              disabled={submitting}
+              className="w-full h-10 flex items-center justify-center gap-2.5 border border-[var(--border-default)] text-[var(--text-secondary)] text-sm font-medium rounded-md hover:bg-[var(--gray-50)] active:bg-[var(--gray-100)] bg-[var(--bg-card)] transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 23 23" aria-hidden="true">
+                <path fill="#f25022" d="M1 1h10v10H1z" />
+                <path fill="#00a4ef" d="M12 1h10v10H12z" />
+                <path fill="#7fba00" d="M1 12h10v10H1z" />
+                <path fill="#ffb900" d="M12 12h10v10H12z" />
+              </svg>
+              {submitting ? "Redirecting…" : "Continue with Microsoft"}
+            </button>
 
-          <button
-            disabled
-            className="w-full h-10 flex items-center justify-center gap-2 border border-[var(--border-default)] text-[var(--text-muted)] text-sm font-medium rounded-md cursor-not-allowed relative bg-[var(--bg-card)] btn-click"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path fill="#9CA3AF" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#9CA3AF" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#9CA3AF" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#9CA3AF" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continue with Google
-            <span className="absolute right-3 text-[10px] bg-[var(--gray-200)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">
-              Soon
-            </span>
-          </button>
-
-          <button
-            disabled
-            className="w-full h-10 flex items-center justify-center gap-2 border border-[var(--border-default)] text-[var(--text-muted)] text-sm font-medium rounded-md cursor-not-allowed relative bg-[var(--bg-card)] btn-click"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#9CA3AF">
-              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-            </svg>
-            Continue with LinkedIn
-            <span className="absolute right-3 text-[10px] bg-[var(--gray-200)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">
-              Soon
-            </span>
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[var(--border-light)]"></div>
+            {/* Google */}
+            <button
+              onClick={handleGoogleLogin}
+              disabled={submitting}
+              className="w-full h-10 flex items-center justify-center gap-2.5 border border-[var(--border-default)] text-[var(--text-secondary)] text-sm font-medium rounded-md hover:bg-[var(--gray-50)] active:bg-[var(--gray-100)] bg-[var(--bg-card)] transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              {submitting ? "Redirecting…" : "Continue with Google"}
+            </button>
           </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="px-2 bg-[var(--bg-card)] text-[var(--text-muted)]">or</span>
-          </div>
-        </div>
+        )}
 
-        {/* Email Form */}
-        <form onSubmit={handleEmailLogin} className="space-y-3">
-          <div>
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={handleEmailBlur}
-              className="w-full h-10 px-3 text-sm border border-[var(--border-default)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
-            />
-          </div>
-          {!isDev && (showPasswordField || password) && (
-            <div className="animate-fade-in-up">
+        {/* ── Dev mode: email / password form ── */}
+        {devMode && (
+          <form onSubmit={handleDevLogin} noValidate className="space-y-3">
+            <div>
+              <label htmlFor="email" className="sr-only">Email address</label>
               <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={handleEmailBlur}
+                required
                 className="w-full h-10 px-3 text-sm border border-[var(--border-default)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
               />
-              <div className="mt-1 text-right">
-                <Link
-                  href="/forgot-password"
-                  className="text-xs text-[var(--accent)] hover:underline"
-                >
-                  Forgot password?
-                </Link>
-              </div>
             </div>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-10 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-all relative overflow-hidden bg-[var(--brand-500)] hover:bg-[var(--brand-600)] btn-click"
-          >
-            <ButtonParticles className="absolute inset-0 z-0" />
-            <span className="relative z-10">{loading ? "Signing in..." : "Sign in"}</span>
-          </button>
-        </form>
+
+            {showPassword && (
+              <div className="animate-fade-in-up space-y-1">
+                <label htmlFor="password" className="sr-only">Password</label>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Password (optional in dev mode)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-10 px-3 text-sm border border-[var(--border-default)] rounded-md bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
+                />
+                <div className="text-right">
+                  <Link href="/forgot-password" className="text-xs text-[var(--accent)] hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full h-10 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-all relative overflow-hidden bg-[var(--brand-500)] hover:bg-[var(--brand-600)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] btn-click"
+            >
+              <ButtonParticles className="absolute inset-0 z-0" />
+              <span className="relative z-10">{submitting ? "Signing in…" : "Sign in"}</span>
+            </button>
+          </form>
+        )}
 
         <p className="mt-4 text-center text-xs text-[var(--text-muted)]">
-          By continuing, you agree to our{" "}
+          By continuing you agree to our{" "}
           <a href="#" className="text-[var(--accent)] hover:underline">Terms</a>
           {" "}and{" "}
-          <a href="#" className="text-[var(--accent)] hover:underline">Privacy Policy</a>
+          <a href="#" className="text-[var(--accent)] hover:underline">Privacy Policy</a>.
         </p>
       </div>
 
-      {/* Dev Mode Indicator */}
-      {isDev && (
+      {/* Dev mode indicator */}
+      {devMode && (
         <div className="mt-4 p-3 bg-[var(--warning-50)] border border-[var(--warning-500)]/30 rounded-lg animate-fade-in-up">
-          <div className="text-xs font-medium text-[var(--warning-600)] mb-1">Development Mode</div>
+          <div className="text-xs font-semibold text-[var(--warning-600)] mb-1">Development Mode</div>
           <p className="text-xs text-[var(--warning-500)]">
-            SSO not configured. Email login uses dev endpoint (password optional).
+            Entra ID is not configured. Enter any email to sign in (password optional).{" "}
+            Set{" "}
+            <code className="font-mono bg-[var(--warning-100)] px-1 rounded">NEXT_PUBLIC_ENTRA_CLIENT_ID</code>{" "}
+            to enable Microsoft SSO.
           </p>
         </div>
       )}
@@ -397,15 +312,17 @@ function LoginContent() {
   );
 }
 
-// Loading fallback for Suspense
-function LoginLoading() {
+// ---------------------------------------------------------------------------
+// Page export (wraps LoginContent in Suspense for useSearchParams)
+// ---------------------------------------------------------------------------
+
+function LoginFallback() {
   return <BrandedLoading context="login" />;
 }
 
-// Wrap in Suspense for useSearchParams
 export default function LoginPage() {
   return (
-    <Suspense fallback={<LoginLoading />}>
+    <Suspense fallback={<LoginFallback />}>
       <LoginContent />
     </Suspense>
   );

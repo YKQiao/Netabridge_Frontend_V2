@@ -1,24 +1,24 @@
-// Singleton particles engine initialization
 import { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 
-let initPromise: Promise<void> | null = null;
-let isInitialized = false;
+/**
+ * Global tracks if engine is already init to avoid re-initializing
+ * which can cause canvas cleared or double canvas issues.
+ */
+let engineInitialized = false;
 
-export async function initParticles(): Promise<void> {
-  if (isInitialized) return;
+/**
+ * Initializes the tsparticles engine.
+ * Should be called in useEffect of components using Particles.
+ */
+export const initParticles = async () => {
+    if (engineInitialized) return;
 
-  if (!initPromise) {
-    initPromise = initParticlesEngine(async (engine) => {
-      await loadSlim(engine);
-    }).then(() => {
-      isInitialized = true;
+    await initParticlesEngine(async (engine) => {
+        // loadSlim installs only the features needed for most cases
+        // but keeps the bundle size small.
+        await loadSlim(engine);
     });
-  }
 
-  return initPromise;
-}
-
-export function isParticlesReady(): boolean {
-  return isInitialized;
-}
+    engineInitialized = true;
+};

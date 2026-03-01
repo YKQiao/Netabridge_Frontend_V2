@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { apiClient } from "@/lib/api/client";
 import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
@@ -405,7 +407,7 @@ function CreateBuyPostModal({ isOpen, onClose, onSave }: {
 
 export default function BuyRequestsPage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserType | null>(null);
+  const { user, isLoading: authLoading, logout: handleLogout } = useAuth();
   const [buyPosts, setBuyPosts] = useState<BuyPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -415,73 +417,25 @@ export default function BuyRequestsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "deadline">("newest");
 
+  // Redirect if not authenticated
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (!authLoading && !user) router.push("/login");
+  }, [authLoading, user, router]);
 
-    const fetchData = async () => {
-      try {
-        const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-        // Fetch user
-        const userRes = await fetch(`/api/v1/users/me`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (userRes.ok) {
-          setUser(await userRes.json());
-        } else if (userRes.status === 401) {
-          sessionStorage.removeItem("access_token");
-          router.push("/login");
-          return;
-        }
-
-        // Fetch buy posts
-        const postsRes = await fetch(`/api/v1/buy-posts`, {
-          headers: { Authorization: `Bearer ${token}`, "X-API-Key": API_KEY },
-        });
-        if (postsRes.ok) {
-          const data = await postsRes.json();
-          setBuyPosts(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("user_oid");
-    router.push("/login");
-  };
+  // Fetch buy posts after auth is ready
+  useEffect(() => {
+    if (!user) return;
+    apiClient
+      .get<BuyPost[]>("/api/v1/buy-posts")
+      .then((data) => setBuyPosts(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user]);
 
   const handleCreatePost = async (data: any) => {
     try {
-      const token = sessionStorage.getItem("access_token");
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-
-      const res = await fetch(`/api/v1/buy-posts`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (res.ok) {
-        const newPost = await res.json();
-        setBuyPosts(prev => [newPost, ...prev]);
-      }
+      const newPost = await apiClient.post<BuyPost>("/api/v1/buy-posts", data);
+      setBuyPosts(prev => [newPost, ...prev]);
     } catch (error) {
       console.error("Failed to create buy post:", error);
     }
