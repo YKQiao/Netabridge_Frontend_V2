@@ -1776,21 +1776,23 @@ export default function ChatPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-200 bg-white p-4 flex-shrink-0">
-            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
-              <div className="flex gap-3">
+          <div className="border-t border-gray-200 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] flex-shrink-0 relative z-10">
+            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative z-10">
+              <div className="flex gap-3 items-center touch-manipulation">
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask about suppliers, connections, prices..."
                   disabled={sending}
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-[14px] focus:outline-none focus:border-[#4A7DC4] focus:ring-2 focus:ring-[#4A7DC4]/20 disabled:bg-gray-50"
+                  className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-[14px] focus:outline-none focus:border-[#4A7DC4] focus:ring-2 focus:ring-[#4A7DC4]/20 disabled:bg-gray-50 touch-manipulation"
+                  style={{ touchAction: 'manipulation' }}
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || sending}
-                  className="px-5 py-3 bg-[#4A7DC4] text-white rounded-lg hover:bg-[#3A5A8C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-5 py-3 bg-[#4A7DC4] text-white rounded-lg hover:bg-[#3A5A8C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 flex-shrink-0 relative z-20 touch-manipulation"
+                  style={{ touchAction: 'manipulation' }}
                 >
                   <PaperPlaneTilt size={18} weight="fill" />
                 </button>
