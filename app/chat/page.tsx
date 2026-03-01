@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { apiClient, API_BASE_URL, API_KEY, getBearerToken } from "@/lib/api/client";
-import { BrandedLoading } from "@/components/ui/BrandedLoading";
+import { ChatSkeleton } from "@/components/ui/SkeletonLoader";
 import {
   House,
   Robot,
@@ -12,9 +12,6 @@ import {
   ShoppingCart,
   UsersThree,
   MagnifyingGlass,
-  Bell,
-  SignOut,
-  User,
   PaperPlaneTilt,
   Plus,
   ChatCircle,
@@ -23,10 +20,15 @@ import {
   Copy,
   ThumbsUp,
   ThumbsDown,
+  List,
+  X,
+  CaretLeft,
+  CaretRight,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
 import { UserDropdown } from "@/components/ui/UserDropdown";
+import { NotificationPanel } from "@/components/ui/NotificationPanel";
 
 // =============================================================================
 // Types
@@ -138,29 +140,33 @@ function ActionChips({ actions }: { actions: { label: string; onClick?: () => vo
 // Shared Components
 // =============================================================================
 
-function NotificationPanel() {
-  return (
-    <div className="relative">
-      <button className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors relative">
-        <Bell size={18} weight="regular" />
-        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">2</span>
-      </button>
-    </div>
-  );
+interface ShellHeaderProps {
+  user: UserType | null;
+  onLogout: () => void;
+  onMenuClick?: () => void;
 }
 
-// UserDropdown imported from shared component
-
-function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
+function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      <LogoWithName variant="white" size="md" />
+      {/* Left Side: Hamburger (mobile) + Logo */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button (Mobile Only) */}
+        <button
+          onClick={onMenuClick}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          aria-label="Open menu"
+        >
+          <List size={20} weight="bold" />
+        </button>
+        <LogoWithName variant="white" size="md" />
+      </div>
       <div className="flex items-center gap-2">
         <NotificationPanel />
-        <div className="w-px h-5 bg-white/20 mx-2" />
+        <div className="hidden sm:block w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
       </div>
     </header>
@@ -174,7 +180,21 @@ interface NavItem {
   active?: boolean;
 }
 
-function Sidebar({ currentPath = "/chat" }: { currentPath?: string }) {
+interface SidebarProps {
+  currentPath?: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+function Sidebar({
+  currentPath = "/chat",
+  collapsed = false,
+  onToggle,
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const navSections: { title: string; items: NavItem[] }[] = [
     { title: "Overview", items: [
       { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
@@ -190,26 +210,106 @@ function Sidebar({ currentPath = "/chat" }: { currentPath?: string }) {
     ]},
   ];
 
-  return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-      <nav className="py-4">
+  const sidebarContent = (
+    <nav className="py-4 flex flex-col h-full">
+      <div className="flex-1">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
-            <div className="px-4 mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
-            </div>
+            {!collapsed && (
+              <div className="px-4 mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
+              </div>
+            )}
+            {collapsed && <div className="h-2" />}
             <div className="space-y-0.5 px-3">
               {section.items.map((item) => (
-                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50"}`}>
-                  <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onMobileClose}
+                  title={collapsed ? item.label : undefined}
+                  className={`
+                    relative flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors
+                    ${collapsed ? "justify-center" : ""}
+                    ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}
+                  `}
+                >
+                  <span className={`flex-shrink-0 ${item.active ? "text-[#4A7DC4]" : "text-gray-400"}`}>{item.icon}</span>
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
                 </Link>
               ))}
             </div>
           </div>
         ))}
-      </nav>
-    </aside>
+      </div>
+
+      {/* Collapse Toggle Button (Desktop only) */}
+      {onToggle && (
+        <div className="hidden md:block px-3 pb-4 border-t border-gray-100 pt-4">
+          <button
+            onClick={onToggle}
+            className={`
+              flex items-center gap-2 px-3 py-2 w-full rounded-md text-[13px] font-medium
+              text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors
+              ${collapsed ? "justify-center" : ""}
+            `}
+          >
+            {collapsed ? (
+              <CaretRight size={16} weight="bold" />
+            ) : (
+              <>
+                <CaretLeft size={16} weight="bold" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside
+        className={`
+          hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto
+          transition-all duration-200 ease-in-out
+          ${collapsed ? "w-[60px]" : "w-60"}
+        `}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar (Overlay) */}
+      <aside
+        className={`
+          fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
+          transform transition-transform duration-200 ease-in-out overflow-y-auto
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <LogoWithName variant="color" size="sm" />
+          <button
+            onClick={onMobileClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
 
@@ -246,86 +346,140 @@ function formatMessageContent(text: string) {
   const elements: React.ReactNode[] = [];
   let keyIndex = 0;
 
-  // First, try to extract and render tables
-  // Match markdown tables: lines with | that have a header separator line (---|---|---)
-  const tableRegex = /(?:^|\n)((?:[^\n]*\|[^\n]*\n)+)/g;
-  let lastIndex = 0;
-  let match;
+  // Split text into lines for processing
+  const lines = text.split('\n');
+  let currentTextBlock: string[] = [];
+  let tableLines: string[] = [];
+  let inTable = false;
 
-  // Check if text contains a table pattern
-  const hasTable = text.includes("|") && (text.includes("---") || text.split("|").length > 3);
+  // Helper to check if a line is a table separator (e.g., |---|---|---|)
+  const isSeparatorLine = (line: string): boolean => {
+    const trimmed = line.trim();
+    if (!trimmed.includes('|') || !trimmed.includes('-')) return false;
+    // Remove all valid separator characters - if nothing left, it's a separator
+    const withoutSeparatorChars = trimmed.replace(/[\s|:\-]/g, '');
+    return withoutSeparatorChars.length === 0;
+  };
 
-  if (hasTable) {
-    // Try to parse as a table
-    const lines = text.split(/\n/).filter(l => l.trim());
-    const tableLines = lines.filter(l => l.includes("|"));
+  // Helper to check if a line looks like a table row
+  const isTableRow = (line: string): boolean => {
+    const trimmed = line.trim();
+    return trimmed.includes('|') && !isSeparatorLine(line);
+  };
 
+  // Helper to parse a table row into cells
+  const parseTableRow = (line: string): string[] => {
+    return line
+      .split('|')
+      .map(cell => cell.trim())
+      .filter((cell, idx, arr) => {
+        // Remove empty cells at the start and end (from leading/trailing |)
+        if (idx === 0 && cell === '') return false;
+        if (idx === arr.length - 1 && cell === '') return false;
+        return true;
+      });
+  };
+
+  // Flush accumulated text block
+  const flushTextBlock = () => {
+    if (currentTextBlock.length > 0) {
+      const blockText = currentTextBlock.join('\n').trim();
+      if (blockText) {
+        elements.push(...formatTextContent(blockText, keyIndex));
+        keyIndex += currentTextBlock.length + 1;
+      }
+      currentTextBlock = [];
+    }
+  };
+
+  // Flush accumulated table
+  const flushTable = () => {
     if (tableLines.length >= 2) {
-      // Extract table rows
       const rows: string[][] = [];
-      let inTable = false;
-      let headerFound = false;
 
-      for (const line of lines) {
-        if (line.includes("|")) {
-          // Skip separator lines (---|---|---)
-          if (line.match(/^[\s|:-]+$/)) {
-            headerFound = true;
-            continue;
-          }
-          const cells = line.split("|").map(c => c.trim()).filter(c => c);
-          if (cells.length > 0) {
-            rows.push(cells);
-            inTable = true;
-          }
-        } else if (inTable && line.trim()) {
-          // Text after table
-          break;
+      for (const line of tableLines) {
+        if (isSeparatorLine(line)) continue;
+        const cells = parseTableRow(line);
+        if (cells.length > 0) {
+          rows.push(cells);
         }
       }
 
-      if (rows.length >= 2) {
+      if (rows.length >= 1) {
+        const headerRow = rows[0];
+        const dataRows = rows.slice(1);
+
         elements.push(
-          <div key={keyIndex++} className="overflow-x-auto my-4 rounded-lg border border-gray-200">
-            <table className="min-w-full text-[13px]">
+          <div key={keyIndex++} className="overflow-x-auto my-4 rounded-lg border border-gray-200 bg-white">
+            <table className="min-w-full text-[13px] border-collapse">
               <thead className="bg-gray-50">
                 <tr>
-                  {rows[0].map((cell, j) => (
-                    <th key={j} className="text-left py-3 px-4 font-semibold text-gray-700 border-b border-gray-200">
-                      {cell}
+                  {headerRow.map((cell, j) => (
+                    <th
+                      key={j}
+                      className="text-left py-3 px-4 font-semibold text-gray-700 border-b border-gray-200"
+                    >
+                      {formatCellContent(cell)}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {rows.slice(1).map((row, ri) => (
-                  <tr key={ri} className="hover:bg-gray-50 transition-colors">
-                    {row.map((cell, ci) => (
-                      <td key={ci} className="py-3 px-4 text-gray-600">
-                        {formatCellContent(cell)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
+              {dataRows.length > 0 && (
+                <tbody className="divide-y divide-gray-100">
+                  {dataRows.map((row, ri) => (
+                    <tr key={ri} className="hover:bg-gray-50 transition-colors">
+                      {headerRow.map((_, ci) => (
+                        <td
+                          key={ci}
+                          className="py-3 px-4 text-gray-600 border-b border-gray-100"
+                        >
+                          {row[ci] ? formatCellContent(row[ci]) : '-'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              )}
             </table>
           </div>
         );
-
-        // Get text after table
-        const tableEndIndex = text.lastIndexOf(rows[rows.length - 1].join("|"));
-        const afterTable = text.slice(tableEndIndex + rows[rows.length - 1].join("|").length).trim();
-        if (afterTable) {
-          elements.push(...formatTextContent(afterTable, keyIndex));
-        }
-
-        return elements;
       }
+    }
+    tableLines = [];
+    inTable = false;
+  };
+
+  // Process each line
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Check if this could be part of a table
+    const looksLikeTableRow = isTableRow(line);
+    const looksLikeSeparator = isSeparatorLine(line);
+
+    if (looksLikeTableRow || looksLikeSeparator) {
+      if (!inTable) {
+        // Starting a new table - flush any accumulated text first
+        flushTextBlock();
+        inTable = true;
+      }
+      tableLines.push(line.trim());
+    } else {
+      if (inTable) {
+        // End of table
+        flushTable();
+      }
+      currentTextBlock.push(line);
     }
   }
 
-  // No table found, format as regular text
-  return formatTextContent(text, 0);
+  // Flush any remaining content
+  if (inTable) {
+    flushTable();
+  }
+  flushTextBlock();
+
+  return elements.length > 0 ? elements : null;
 }
 
 // Format cell content (prices, links, etc.)
@@ -511,6 +665,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -687,12 +843,8 @@ export default function ChatPage() {
     navigator.clipboard.writeText(text);
   };
 
-  if (loading) {
-    return <BrandedLoading context="chat" />;
-  }
-
   return (
-    <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
+    <div className="h-screen flex flex-col bg-[#F7F8FA] overflow-hidden">
       <style jsx global>{`
         @keyframes blink {
           0%, 100% { opacity: 1; }
@@ -700,13 +852,27 @@ export default function ChatPage() {
         }
       `}</style>
 
-      <ShellHeader user={user} onLogout={handleLogout} />
+      <ShellHeader
+        user={user}
+        onLogout={handleLogout}
+        onMenuClick={() => setSidebarMobileOpen(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar currentPath="/chat" />
+        <Sidebar
+          currentPath="/chat"
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          mobileOpen={sidebarMobileOpen}
+          onMobileClose={() => setSidebarMobileOpen(false)}
+        />
 
-        {/* Chat Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        {loading ? (
+          <ChatSkeleton />
+        ) : (
+        <>
+        {/* Chat Sidebar - hidden on mobile */}
+        <div className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0 overflow-hidden">
           <div className="p-3 border-b border-gray-100">
             <button
               onClick={createSession}
@@ -740,9 +906,9 @@ export default function ChatPage() {
         </div>
 
         {/* Main Chat Area */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Chat Header */}
-          <div className="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between">
+          <div className="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center">
                 <Robot size={20} weight="fill" className="text-white" />
@@ -793,7 +959,7 @@ export default function ChatPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-200 bg-white p-4">
+          <div className="border-t border-gray-200 bg-white p-4 flex-shrink-0">
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
               <div className="flex gap-3">
                 <input
@@ -818,6 +984,8 @@ export default function ChatPage() {
             </form>
           </div>
         </main>
+        </>
+        )}
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { apiClient } from "@/lib/api/client";
-import { BrandedLoading } from "@/components/ui/BrandedLoading";
+import { ConnectionsSkeleton } from "@/components/ui/SkeletonLoader";
 import {
   House,
   Robot,
@@ -12,10 +12,6 @@ import {
   ShoppingCart,
   UsersThree,
   MagnifyingGlass,
-  Bell,
-  SignOut,
-  User,
-  GearSix,
   ChatText,
   DotsThree,
   Check,
@@ -27,9 +23,13 @@ import {
   SquaresFour,
   List,
   Warning,
+  CaretLeft,
+  CaretRight,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
+import { UserDropdown } from "@/components/ui/UserDropdown";
+import { NotificationPanel } from "@/components/ui/NotificationPanel";
 
 // =============================================================================
 // Types
@@ -62,79 +62,33 @@ type StatusFilter = "all" | "PENDING" | "ACCEPTED";
 // Shared Components
 // =============================================================================
 
-function NotificationPanel() {
-  const unreadCount = 2;
-
-  return (
-    <div className="relative">
-      <button className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors relative">
-        <Bell size={18} weight="regular" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-            {unreadCount}
-          </span>
-        )}
-      </button>
-    </div>
-  );
+interface ShellHeaderProps {
+  user: UserType | null;
+  onLogout: () => void;
+  onMenuClick?: () => void;
 }
 
-function UserDropdown({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 transition-colors"
-      >
-        <span className="text-white/80 text-sm">
-          {user?.display_name || user?.email?.split("@")[0] || "User"}
-        </span>
-        <div className="w-8 h-8 rounded bg-white/20 text-white flex items-center justify-center text-sm font-medium">
-          {(user?.display_name?.[0] || user?.email?.[0] || "U").toUpperCase()}
-        </div>
-      </button>
-
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <div className="text-sm font-semibold text-gray-900">{user?.display_name || "User"}</div>
-              <div className="text-xs text-gray-500 truncate">{user?.email}</div>
-            </div>
-            <div className="py-1.5">
-              <Link href="/profile" className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50" onClick={() => setIsOpen(false)}>
-                <User size={16} className="text-gray-400" />
-                My Profile
-              </Link>
-              <Link href="/settings" className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50" onClick={() => setIsOpen(false)}>
-                <GearSix size={16} className="text-gray-400" />
-                Settings
-              </Link>
-              <button onClick={() => { setIsOpen(false); onLogout(); }} className="flex items-center gap-3 px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 w-full">
-                <SignOut size={16} />
-                Sign out
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
+function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      <LogoWithName variant="white" size="md" />
+      {/* Left Side: Hamburger (mobile) + Logo */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger Menu Button (Mobile Only) */}
+        <button
+          onClick={onMenuClick}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          aria-label="Open menu"
+        >
+          <List size={20} weight="bold" />
+        </button>
+        <LogoWithName variant="white" size="md" />
+      </div>
       <div className="flex items-center gap-2">
         <NotificationPanel />
-        <div className="w-px h-5 bg-white/20 mx-2" />
+        <div className="hidden sm:block w-px h-5 bg-white/20 mx-2" />
         <UserDropdown user={user} onLogout={onLogout} />
       </div>
     </header>
@@ -148,7 +102,21 @@ interface NavItem {
   active?: boolean;
 }
 
-function Sidebar({ currentPath = "/connections" }: { currentPath?: string }) {
+interface SidebarProps {
+  currentPath?: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+function Sidebar({
+  currentPath = "/connections",
+  collapsed = false,
+  onToggle,
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: "Overview",
@@ -173,32 +141,106 @@ function Sidebar({ currentPath = "/connections" }: { currentPath?: string }) {
     },
   ];
 
-  return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-      <nav className="py-4">
+  const sidebarContent = (
+    <nav className="py-4 flex flex-col h-full">
+      <div className="flex-1">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
-            <div className="px-4 mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
-            </div>
+            {!collapsed && (
+              <div className="px-4 mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</span>
+              </div>
+            )}
+            {collapsed && <div className="h-2" />}
             <div className="space-y-0.5 px-3">
               {section.items.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${
-                    item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                  }`}
+                  onClick={onMobileClose}
+                  title={collapsed ? item.label : undefined}
+                  className={`
+                    relative flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors
+                    ${collapsed ? "justify-center" : ""}
+                    ${item.active ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}
+                  `}
                 >
-                  <span className={item.active ? "text-[#4A7DC4]" : "text-gray-400"}>{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
+                  <span className={`flex-shrink-0 ${item.active ? "text-[#4A7DC4]" : "text-gray-400"}`}>{item.icon}</span>
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
                 </Link>
               ))}
             </div>
           </div>
         ))}
-      </nav>
-    </aside>
+      </div>
+
+      {/* Collapse Toggle Button (Desktop only) */}
+      {onToggle && (
+        <div className="hidden md:block px-3 pb-4 border-t border-gray-100 pt-4">
+          <button
+            onClick={onToggle}
+            className={`
+              flex items-center gap-2 px-3 py-2 w-full rounded-md text-[13px] font-medium
+              text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors
+              ${collapsed ? "justify-center" : ""}
+            `}
+          >
+            {collapsed ? (
+              <CaretRight size={16} weight="bold" />
+            ) : (
+              <>
+                <CaretLeft size={16} weight="bold" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside
+        className={`
+          hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto
+          transition-all duration-200 ease-in-out
+          ${collapsed ? "w-[60px]" : "w-60"}
+        `}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar (Overlay) */}
+      <aside
+        className={`
+          fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
+          transform transition-transform duration-200 ease-in-out overflow-y-auto
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Mobile Header with Close Button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <LogoWithName variant="color" size="sm" />
+          <button
+            onClick={onMobileClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          >
+            <X size={18} weight="bold" />
+          </button>
+        </div>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
 
@@ -459,6 +501,190 @@ function InviteModal({ isOpen, onClose, onInvite, userEmail }: {
 }
 
 // =============================================================================
+// Add Contact Modal (Manual Entry - No Invite)
+// =============================================================================
+
+interface ContactFormData {
+  name: string;
+  email: string;
+  company: string;
+  role: string;
+  phone: string;
+  notes: string;
+}
+
+function AddContactModal({ isOpen, onClose, onAdd }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (data: ContactFormData) => Promise<{ success: boolean; error?: string }>;
+}) {
+  const [formData, setFormData] = useState<ContactFormData>({
+    name: "",
+    email: "",
+    company: "",
+    role: "",
+    phone: "",
+    notes: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name) return;
+
+    setError("");
+    setSaving(true);
+    const result = await onAdd(formData);
+    setSaving(false);
+
+    if (result.success) {
+      setFormData({ name: "", email: "", company: "", role: "", phone: "", notes: "" });
+      onClose();
+    } else {
+      setError(result.error || "Failed to add contact");
+    }
+  };
+
+  const handleClose = () => {
+    setFormData({ name: "", email: "", company: "", role: "", phone: "", notes: "" });
+    setError("");
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-[18px] font-semibold text-gray-900">Add Contact</h2>
+            <p className="text-[13px] text-gray-500 mt-0.5">Add contact details directly without sending an invite</p>
+          </div>
+          <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2 text-[13px] text-red-700">
+            <Warning size={16} weight="fill" />
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name - Required */}
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">
+              Full Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="John Smith"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+              required
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="john@company.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+            />
+          </div>
+
+          {/* Company & Role - Two columns */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">
+                Company
+              </label>
+              <input
+                type="text"
+                value={formData.company}
+                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                placeholder="Acme Corp"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">
+                Role / Title
+              </label>
+              <input
+                type="text"
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                placeholder="Sales Manager"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+              />
+            </div>
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="+1 (555) 123-4567"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">
+              Notes
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="How you met, what they specialize in, etc."
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4] resize-none"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !formData.name}
+              className="flex-1 px-4 py-2.5 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-lg hover:bg-[#3A5A8C] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {saving ? "Saving..." : "Add Contact"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Main Page
 // =============================================================================
 
@@ -471,7 +697,10 @@ export default function ConnectionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [showStats, setShowStats] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -523,6 +752,20 @@ export default function ConnectionsPage() {
     }
   };
 
+  const handleAddContact = async (data: ContactFormData): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // POST to backend contacts endpoint (manual entry, no invite sent)
+      await apiClient.post("/api/v1/contacts", data);
+      // Refresh connections list to show new contact
+      const connData = await apiClient.get<Connection[]>("/api/v1/connections");
+      setConnections(Array.isArray(connData) ? connData : []);
+      return { success: true };
+    } catch (error: any) {
+      console.error("Failed to add contact:", error);
+      return { success: false, error: error.message || "Failed to add contact" };
+    }
+  };
+
   // Filter connections
   const filteredConnections = connections.filter(c => {
     if (statusFilter !== "all" && c.status !== statusFilter) return false;
@@ -548,58 +791,80 @@ export default function ConnectionsPage() {
     return c.status === "ACCEPTED" && created >= thisMonth;
   }).length;
 
-  if (loading) {
-    return <BrandedLoading context="connections" />;
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
-      <ShellHeader user={user} onLogout={handleLogout} />
+      <ShellHeader
+        user={user}
+        onLogout={handleLogout}
+        onMenuClick={() => setSidebarMobileOpen(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar currentPath="/connections" />
+        <Sidebar
+          currentPath="/connections"
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          mobileOpen={sidebarMobileOpen}
+          onMobileClose={() => setSidebarMobileOpen(false)}
+        />
 
+        {loading ? (
+          <main className="flex-1 overflow-auto">
+            <ConnectionsSkeleton />
+          </main>
+        ) : (
         <main className="flex-1 overflow-y-auto">
-          <div className="p-6 max-w-[1400px]">
+          <div className="p-4 md:p-6 max-w-[1400px]">
             {/* Page Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h1 className="text-[24px] font-semibold text-gray-900">Connections</h1>
-                <p className="text-[14px] text-gray-500 mt-1">
+                <h1 className="text-[20px] md:text-[24px] font-semibold text-gray-900">Connections</h1>
+                <p className="text-[13px] md:text-[14px] text-gray-500 mt-1">
                   Manage your network of {acceptedCount} connections
                 </p>
               </div>
-              <button
-                onClick={() => setShowInviteModal(true)}
-                className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
-              >
-                <Plus size={18} weight="bold" />
-                Invite Connection
-              </button>
+              <div className="flex gap-2 sm:gap-3">
+                <button
+                  onClick={() => setShowAddContactModal(true)}
+                  className="px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 text-[13px] sm:text-[14px] font-medium rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+                >
+                  <Plus size={18} />
+                  <span className="hidden sm:inline">Add Contact</span>
+                  <span className="sm:hidden">Add</span>
+                </button>
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="px-3 sm:px-4 py-2 bg-[#4A7DC4] text-white text-[13px] sm:text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
+                >
+                  <Plus size={18} weight="bold" />
+                  <span className="hidden sm:inline">Invite Connection</span>
+                  <span className="sm:hidden">Invite</span>
+                </button>
+              </div>
             </div>
 
             {/* Stats - Collapsible */}
             {showStats && (
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-white border border-gray-200 rounded-md p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total Connections</div>
-                  <div className="text-[24px] font-semibold text-gray-900">{acceptedCount}</div>
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
+                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total</div>
+                  <div className="text-[18px] sm:text-[24px] font-semibold text-gray-900">{acceptedCount}</div>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-md p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Pending Requests</div>
-                  <div className="text-[24px] font-semibold text-amber-600">{pendingCount}</div>
+                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
+                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Pending</div>
+                  <div className="text-[18px] sm:text-[24px] font-semibold text-amber-600">{pendingCount}</div>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-md p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">New This Month</div>
-                  <div className="text-[24px] font-semibold text-emerald-600">+{newThisMonth}</div>
+                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
+                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">New</div>
+                  <div className="text-[18px] sm:text-[24px] font-semibold text-emerald-600">+{newThisMonth}</div>
                 </div>
               </div>
             )}
 
             {/* Toolbar - Search left, filters and controls right */}
-            <div className="flex items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6">
               {/* Left: Search */}
-              <div className="relative w-80">
+              <div className="relative w-full sm:w-80">
                 <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
@@ -611,9 +876,9 @@ export default function ConnectionsPage() {
               </div>
 
               {/* Right: Filters, View, Stats Toggle */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto">
                 {/* Status Filter */}
-                <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                <div className="flex gap-1 bg-gray-100 rounded-md p-1 flex-shrink-0">
                   {[
                     { key: "all", label: "All" },
                     { key: "ACCEPTED", label: "Connected" },
@@ -622,7 +887,7 @@ export default function ConnectionsPage() {
                     <button
                       key={f.key}
                       onClick={() => setStatusFilter(f.key as StatusFilter)}
-                      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors ${
+                      className={`px-2 sm:px-3 py-1.5 text-[11px] sm:text-[12px] font-medium rounded transition-colors whitespace-nowrap ${
                         statusFilter === f.key
                           ? "bg-white text-gray-900 shadow-sm"
                           : "text-gray-600 hover:text-gray-900"
@@ -633,10 +898,10 @@ export default function ConnectionsPage() {
                   ))}
                 </div>
 
-                <div className="w-px h-6 bg-gray-200" />
+                <div className="hidden sm:block w-px h-6 bg-gray-200 flex-shrink-0" />
 
                 {/* View toggle */}
-                <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                <div className="flex gap-1 bg-gray-100 rounded-md p-1 flex-shrink-0">
                   <button
                     onClick={() => setViewMode("table")}
                     className={`p-1.5 rounded transition-colors ${viewMode === "table" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
@@ -665,39 +930,64 @@ export default function ConnectionsPage() {
             </div>
 
             {/* Content */}
+            {/* On mobile, always show grid view. On desktop, respect viewMode */}
             {viewMode === "table" ? (
-              <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contact</th>
-                      <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
-                      <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Connected</th>
-                      <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredConnections.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-5 py-12 text-center text-gray-500">
-                          <UsersThree size={40} className="mx-auto mb-3 text-gray-300" />
-                          <p className="text-[14px]">No connections found</p>
-                          <p className="text-[13px] text-gray-400 mt-1">Invite colleagues to build your network</p>
-                        </td>
+              <>
+                {/* Table view - hidden on mobile */}
+                <div className="hidden md:block bg-white border border-gray-200 rounded-md overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contact</th>
+                        <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
+                        <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Connected</th>
+                        <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Actions</th>
                       </tr>
-                    ) : (
-                      filteredConnections.map((conn) => (
-                        <ConnectionTableRow
+                    </thead>
+                    <tbody>
+                      {filteredConnections.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-5 py-12 text-center text-gray-500">
+                            <UsersThree size={40} className="mx-auto mb-3 text-gray-300" />
+                            <p className="text-[14px]">No connections found</p>
+                            <p className="text-[13px] text-gray-400 mt-1">Invite colleagues to build your network</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredConnections.map((conn) => (
+                          <ConnectionTableRow
+                            key={conn.id}
+                            connection={conn}
+                            onAccept={conn.status === "PENDING" ? handleAccept : undefined}
+                            onReject={conn.status === "PENDING" ? handleReject : undefined}
+                          />
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile fallback - show cards */}
+                <div className="md:hidden">
+                  {filteredConnections.length === 0 ? (
+                    <div className="bg-white border border-gray-200 rounded-md py-12 text-center text-gray-500">
+                      <UsersThree size={40} className="mx-auto mb-3 text-gray-300" />
+                      <p className="text-[14px]">No connections found</p>
+                      <p className="text-[13px] text-gray-400 mt-1">Invite colleagues to build your network</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {filteredConnections.map((conn) => (
+                        <ConnectionCard
                           key={conn.id}
                           connection={conn}
                           onAccept={conn.status === "PENDING" ? handleAccept : undefined}
                           onReject={conn.status === "PENDING" ? handleReject : undefined}
                         />
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <>
                 {filteredConnections.length === 0 ? (
@@ -722,6 +1012,7 @@ export default function ConnectionsPage() {
             )}
           </div>
         </main>
+        )}
       </div>
 
       <InviteModal
@@ -729,6 +1020,12 @@ export default function ConnectionsPage() {
         onClose={() => setShowInviteModal(false)}
         onInvite={handleInvite}
         userEmail={user?.email || ""}
+      />
+
+      <AddContactModal
+        isOpen={showAddContactModal}
+        onClose={() => setShowAddContactModal(false)}
+        onAdd={handleAddContact}
       />
     </div>
   );

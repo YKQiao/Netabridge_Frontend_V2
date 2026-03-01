@@ -12,9 +12,6 @@ import {
   ShoppingCart,
   UsersThree,
   MagnifyingGlass,
-  Bell,
-  SignOut,
-  User,
   Plus,
   Pencil,
   Trash,
@@ -33,6 +30,8 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
+import { UserDropdown } from "@/components/ui/UserDropdown";
+import { NotificationPanel } from "@/components/ui/NotificationPanel";
 
 // =============================================================================
 // Types
@@ -59,50 +58,6 @@ interface BuyPost {
 // =============================================================================
 // Shared Components
 // =============================================================================
-
-function NotificationPanel() {
-  return (
-    <div className="relative">
-      <button className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors relative">
-        <Bell size={18} />
-        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">2</span>
-      </button>
-    </div>
-  );
-}
-
-function UserDropdown({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 transition-colors">
-        <span className="text-white/80 text-sm">{user?.display_name || user?.email?.split("@")[0] || "User"}</span>
-        <div className="w-8 h-8 rounded bg-white/20 text-white flex items-center justify-center text-sm font-medium">
-          {(user?.display_name?.[0] || user?.email?.[0] || "U").toUpperCase()}
-        </div>
-      </button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <div className="text-sm font-semibold text-gray-900">{user?.display_name || "User"}</div>
-              <div className="text-xs text-gray-500 truncate">{user?.email}</div>
-            </div>
-            <div className="py-1.5">
-              <Link href="/profile" className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50" onClick={() => setIsOpen(false)}>
-                <User size={16} className="text-gray-400" /> My Profile
-              </Link>
-              <button onClick={() => { setIsOpen(false); onLogout(); }} className="flex items-center gap-3 px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 w-full">
-                <SignOut size={16} /> Sign out
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 function ShellHeader({ user, onLogout }: { user: UserType | null; onLogout: () => void }) {
   return (

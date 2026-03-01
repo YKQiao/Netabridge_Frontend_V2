@@ -1,0 +1,21 @@
+{
+  "name": "NetaBridge",
+  "short_name": "NetaBridge",
+  "description": "B2B Trading Network - Trade with people you know",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

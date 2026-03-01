@@ -11,8 +11,68 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "NetaBridge",
-  description: "Trade with people you know",
+  title: {
+    default: "NetaBridge - B2B Trading Network",
+    template: "%s | NetaBridge",
+  },
+  description:
+    "NetaBridge is a B2B trading network that connects businesses with trusted partners. Trade with people you know, discover new opportunities, and grow your network.",
+  keywords: [
+    "B2B trading",
+    "business network",
+    "trade platform",
+    "wholesale",
+    "supply chain",
+    "business connections",
+  ],
+  authors: [{ name: "NetaBridge" }],
+  creator: "NetaBridge",
+  publisher: "NetaBridge",
+  metadataBase: new URL("https://netabridge.com"),
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://netabridge.com",
+    siteName: "NetaBridge",
+    title: "NetaBridge - B2B Trading Network",
+    description:
+      "Connect with trusted business partners and trade efficiently. NetaBridge is the B2B trading network built for modern businesses.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "NetaBridge - B2B Trading Network",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "NetaBridge - B2B Trading Network",
+    description:
+      "Connect with trusted business partners and trade efficiently. NetaBridge is the B2B trading network built for modern businesses.",
+    images: ["/og-image.png"],
+    creator: "@netabridge",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({
