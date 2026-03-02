@@ -240,9 +240,8 @@ function EntityHoverCard({
       {children}
       {isOpen && (
         <div
-          className={`absolute z-50 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
-            position === "above" ? "bottom-full mb-2" : "top-full mt-2"
-          } left-1/2 -translate-x-1/2`}
+          className={`absolute z-50 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${position === "above" ? "bottom-full mb-2" : "top-full mt-2"
+            } left-1/2 -translate-x-1/2`}
         >
           {/* Header */}
           <div className="bg-gradient-to-r from-[#4A7DC4] to-[#354A5F] px-4 py-3">
@@ -597,19 +596,25 @@ function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const navSections: { title: string; items: NavItem[] }[] = [
-    { title: "Overview", items: [
-      { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
-      { icon: <Robot size={18} />, label: "AI Assistant", href: "/chat", active: currentPath === "/chat" },
-    ]},
-    { title: "Trade", items: [
-      { icon: <Package size={18} />, label: "My Resources", href: "/resources" },
-      { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests" },
-    ]},
-    { title: "Network", items: [
-      { icon: <UsersThree size={18} />, label: "Connections", href: "/connections" },
-      { icon: <ChatText size={18} />, label: "Messages", href: "/messages" },
-      { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
-    ]},
+    {
+      title: "Overview", items: [
+        { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
+        { icon: <Robot size={18} />, label: "AI Assistant", href: "/chat", active: currentPath === "/chat" },
+      ]
+    },
+    {
+      title: "Trade", items: [
+        { icon: <Package size={18} />, label: "My Resources", href: "/resources" },
+        { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests" },
+      ]
+    },
+    {
+      title: "Network", items: [
+        { icon: <UsersThree size={18} />, label: "Connections", href: "/connections" },
+        { icon: <ChatText size={18} />, label: "Messages", href: "/messages" },
+        { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
+      ]
+    },
   ];
 
   const sidebarContent = (
@@ -723,9 +728,8 @@ function SessionItem({ session, isActive, onClick }: { session: ChatSession; isA
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 rounded-md transition-colors group ${
-        isActive ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-700 hover:bg-gray-100"
-      }`}
+      className={`w-full text-left px-3 py-2.5 rounded-md transition-colors group ${isActive ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-700 hover:bg-gray-100"
+        }`}
     >
       <div className="flex items-center gap-2">
         <ChatCircle size={16} className={isActive ? "text-[#4A7DC4]" : "text-gray-400"} />
@@ -1180,11 +1184,10 @@ function MessageBubble({ message, onCopy, isLatest, onActionClick }: {
           </div>
         )}
         <div
-          className={`px-4 py-3 rounded-2xl ${
-            isUser
+          className={`px-4 py-3 rounded-2xl ${isUser
               ? "bg-[#4A7DC4] text-white rounded-tr-sm"
               : "bg-white border border-gray-200 rounded-tl-sm shadow-sm"
-          }`}
+            }`}
         >
           {isUser ? (
             <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{message.content.text}</p>
@@ -1429,7 +1432,19 @@ export default function ChatPage() {
               if (line.startsWith("data: ")) {
                 const data = line.slice(6);
                 if (data === "[DONE]" || data.includes("Stream finished")) continue;
-                assistantText += data;
+
+                let chunkText = data;
+                try {
+                  const parsedChunk = JSON.parse(data);
+                  if (typeof parsedChunk === 'string') {
+                    chunkText = parsedChunk;
+                  } else if (parsedChunk && parsedChunk.content && typeof parsedChunk.content.text === 'string') {
+                    chunkText = parsedChunk.content.text;
+                  }
+                } catch (e) {
+                  // If not JSON, fall back to returning raw data string (legacy fallback)
+                }
+                assistantText += chunkText;
                 setMessages(prev => {
                   const updated = [...prev];
                   const lastIdx = updated.length - 1;
@@ -1605,79 +1620,19 @@ export default function ChatPage() {
         {loading ? (
           <ChatSkeleton />
         ) : (
-        <>
-        {/* Chat Sidebar - hidden on mobile */}
-        <div className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0 overflow-hidden">
-          <div className="p-3 border-b border-gray-100">
-            <button
-              onClick={createSession}
-              className="w-full px-3 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-2"
-            >
-              <Plus size={16} weight="bold" />
-              New Chat
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-2">
-            {sessions.length === 0 ? (
-              <div className="px-3 py-8 text-center text-gray-400 text-[13px]">
-                No conversations yet
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {sessions.map((session) => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    isActive={currentSession?.id === session.id}
-                    onClick={() => {
-                      setCurrentSession(session);
-                      // Load messages for this session from localStorage
-                      try {
-                        const storedMessages = localStorage.getItem(CHAT_MESSAGES_KEY);
-                        if (storedMessages) {
-                          const allMessages = JSON.parse(storedMessages);
-                          setMessages(allMessages[session.id] || []);
-                        } else {
-                          setMessages([]);
-                        }
-                      } catch (e) {
-                        setMessages([]);
-                      }
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile Chat List Overlay */}
-        {chatListOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setChatListOpen(false)} />
-            <div className="absolute top-0 right-0 h-full w-72 bg-white shadow-xl flex flex-col animate-slide-in-right">
-              <div className="p-3 border-b border-gray-100 flex items-center justify-between">
-                <h3 className="text-[14px] font-semibold text-gray-900">Chat History</h3>
-                <button
-                  onClick={() => setChatListOpen(false)}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+          <>
+            {/* Chat Sidebar - hidden on mobile */}
+            <div className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0 overflow-hidden">
               <div className="p-3 border-b border-gray-100">
                 <button
-                  onClick={() => {
-                    createSession();
-                    setChatListOpen(false);
-                  }}
+                  onClick={createSession}
                   className="w-full px-3 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-2"
                 >
                   <Plus size={16} weight="bold" />
                   New Chat
                 </button>
               </div>
+
               <div className="flex-1 overflow-y-auto p-2">
                 {sessions.length === 0 ? (
                   <div className="px-3 py-8 text-center text-gray-400 text-[13px]">
@@ -1692,6 +1647,7 @@ export default function ChatPage() {
                         isActive={currentSession?.id === session.id}
                         onClick={() => {
                           setCurrentSession(session);
+                          // Load messages for this session from localStorage
                           try {
                             const storedMessages = localStorage.getItem(CHAT_MESSAGES_KEY);
                             if (storedMessages) {
@@ -1703,7 +1659,6 @@ export default function ChatPage() {
                           } catch (e) {
                             setMessages([]);
                           }
-                          setChatListOpen(false);
                         }}
                       />
                     ))}
@@ -1711,100 +1666,160 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Main Chat Area */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Chat Header */}
-          <div className="h-14 bg-white border-b border-gray-200 px-4 md:px-6 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center">
-                <Robot size={20} weight="fill" className="text-white" />
-              </div>
-              <div>
-                <h2 className="text-[15px] font-semibold text-gray-900">NetaBridge AI</h2>
-                <p className="text-[11px] text-gray-500 hidden sm:block">Your intelligent trade assistant</p>
-              </div>
-            </div>
-            {/* Mobile: Chat history toggle */}
-            <button
-              onClick={() => setChatListOpen(true)}
-              className="md:hidden p-2 text-gray-500 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded-lg transition-colors"
-              title="Chat history"
-            >
-              <ChatCircle size={20} />
-            </button>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center mb-4">
-                  <Robot size={36} weight="fill" className="text-white" />
+            {/* Mobile Chat List Overlay */}
+            {chatListOpen && (
+              <div className="fixed inset-0 z-50 md:hidden">
+                <div className="absolute inset-0 bg-black/50" onClick={() => setChatListOpen(false)} />
+                <div className="absolute top-0 right-0 h-full w-72 bg-white shadow-xl flex flex-col animate-slide-in-right">
+                  <div className="p-3 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="text-[14px] font-semibold text-gray-900">Chat History</h3>
+                    <button
+                      onClick={() => setChatListOpen(false)}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="p-3 border-b border-gray-100">
+                    <button
+                      onClick={() => {
+                        createSession();
+                        setChatListOpen(false);
+                      }}
+                      className="w-full px-3 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus size={16} weight="bold" />
+                      New Chat
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {sessions.length === 0 ? (
+                      <div className="px-3 py-8 text-center text-gray-400 text-[13px]">
+                        No conversations yet
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {sessions.map((session) => (
+                          <SessionItem
+                            key={session.id}
+                            session={session}
+                            isActive={currentSession?.id === session.id}
+                            onClick={() => {
+                              setCurrentSession(session);
+                              try {
+                                const storedMessages = localStorage.getItem(CHAT_MESSAGES_KEY);
+                                if (storedMessages) {
+                                  const allMessages = JSON.parse(storedMessages);
+                                  setMessages(allMessages[session.id] || []);
+                                } else {
+                                  setMessages([]);
+                                }
+                              } catch (e) {
+                                setMessages([]);
+                              }
+                              setChatListOpen(false);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <h2 className="text-[20px] font-semibold text-gray-900 mb-2">How can I help you today?</h2>
-                <p className="text-[14px] text-gray-500 mb-8 text-center max-w-md">
-                  I can help you find suppliers, compare prices, manage your connections, and discover new opportunities.
-                </p>
-                <SuggestedPrompts onSelect={sendMessage} />
-              </div>
-            ) : (
-              <div className="max-w-3xl mx-auto">
-                {messages.map((msg, index) => {
-                  // Skip empty assistant messages (we show ThinkingIndicator instead)
-                  if (msg.role === "ASSISTANT" && !msg.content.text?.trim()) {
-                    return null;
-                  }
-                  return (
-                    <MessageBubble
-                      key={msg.id}
-                      message={msg}
-                      onCopy={() => handleCopy(msg.content.text)}
-                      isLatest={index === messages.length - 1}
-                      onActionClick={handleActionClick}
-                    />
-                  );
-                })}
-                {/* Only show ThinkingIndicator when waiting for response, not while streaming */}
-                {(sending || isThinking) && !messages.some(m => m.role === "ASSISTANT" && m.isTyping && m.content.text?.trim()) && (
-                  <ThinkingIndicator message={isThinking ? "Thinking..." : "Responding..."} />
-                )}
-                <div ref={messagesEndRef} />
               </div>
             )}
-          </div>
 
-          {/* Input */}
-          <div className="border-t border-gray-200 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] flex-shrink-0 relative z-10">
-            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative z-10">
-              <div className="flex gap-3 items-center touch-manipulation">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask about suppliers, connections, prices..."
-                  disabled={sending}
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-[14px] focus:outline-none focus:border-[#4A7DC4] focus:ring-2 focus:ring-[#4A7DC4]/20 disabled:bg-gray-50 touch-manipulation"
-                  style={{ touchAction: 'manipulation' }}
-                />
+            {/* Main Chat Area */}
+            <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              {/* Chat Header */}
+              <div className="h-14 bg-white border-b border-gray-200 px-4 md:px-6 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center">
+                    <Robot size={20} weight="fill" className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-gray-900">NetaBridge AI</h2>
+                    <p className="text-[11px] text-gray-500 hidden sm:block">Your intelligent trade assistant</p>
+                  </div>
+                </div>
+                {/* Mobile: Chat history toggle */}
                 <button
-                  type="submit"
-                  disabled={!input.trim() || sending}
-                  className="px-5 py-3 bg-[#4A7DC4] text-white rounded-lg hover:bg-[#3A5A8C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 flex-shrink-0 relative z-20 touch-manipulation"
-                  style={{ touchAction: 'manipulation' }}
+                  onClick={() => setChatListOpen(true)}
+                  className="md:hidden p-2 text-gray-500 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded-lg transition-colors"
+                  title="Chat history"
                 >
-                  <PaperPlaneTilt size={18} weight="fill" />
+                  <ChatCircle size={20} />
                 </button>
               </div>
-              <p className="text-[11px] text-gray-400 text-center mt-2">
-                NetaBridge AI searches your network first, then the platform, then the web.
-              </p>
-            </form>
-          </div>
-        </main>
-        </>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center mb-4">
+                      <Robot size={36} weight="fill" className="text-white" />
+                    </div>
+                    <h2 className="text-[20px] font-semibold text-gray-900 mb-2">How can I help you today?</h2>
+                    <p className="text-[14px] text-gray-500 mb-8 text-center max-w-md">
+                      I can help you find suppliers, compare prices, manage your connections, and discover new opportunities.
+                    </p>
+                    <SuggestedPrompts onSelect={sendMessage} />
+                  </div>
+                ) : (
+                  <div className="max-w-3xl mx-auto">
+                    {messages.map((msg, index) => {
+                      // Skip empty assistant messages (we show ThinkingIndicator instead)
+                      if (msg.role === "ASSISTANT" && !msg.content.text?.trim()) {
+                        return null;
+                      }
+                      return (
+                        <MessageBubble
+                          key={msg.id}
+                          message={msg}
+                          onCopy={() => handleCopy(msg.content.text)}
+                          isLatest={index === messages.length - 1}
+                          onActionClick={handleActionClick}
+                        />
+                      );
+                    })}
+                    {/* Only show ThinkingIndicator when waiting for response, not while streaming */}
+                    {(sending || isThinking) && !messages.some(m => m.role === "ASSISTANT" && m.isTyping && m.content.text?.trim()) && (
+                      <ThinkingIndicator message={isThinking ? "Thinking..." : "Responding..."} />
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
+
+              {/* Input */}
+              <div className="border-t border-gray-200 bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] flex-shrink-0 relative z-10">
+                <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative z-10">
+                  <div className="flex gap-3 items-center touch-manipulation">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Ask about suppliers, connections, prices..."
+                      disabled={sending}
+                      className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-[14px] focus:outline-none focus:border-[#4A7DC4] focus:ring-2 focus:ring-[#4A7DC4]/20 disabled:bg-gray-50 touch-manipulation"
+                      style={{ touchAction: 'manipulation' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!input.trim() || sending}
+                      className="px-5 py-3 bg-[#4A7DC4] text-white rounded-lg hover:bg-[#3A5A8C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 flex-shrink-0 relative z-20 touch-manipulation"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      <PaperPlaneTilt size={18} weight="fill" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-400 text-center mt-2">
+                    NetaBridge AI searches your network first, then the platform, then the web.
+                  </p>
+                </form>
+              </div>
+            </main>
+          </>
         )}
       </div>
     </div>

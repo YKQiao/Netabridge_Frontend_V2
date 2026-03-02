@@ -90,7 +90,12 @@ function LoginContent() {
   const handleLogin = () => {
     setSubmitting(true);
     setError("");
-    window.location.href = `${API_BASE_URL}${AUTH_ENDPOINTS.microsoftLogin}`;
+
+    // Pass current origin as proxy_base_url to handle local Next.js proxy rewrite scenarios
+    const proxyBaseUrl = encodeURIComponent(window.location.origin);
+    const loginUrl = `${API_BASE_URL}${AUTH_ENDPOINTS.microsoftLogin}`;
+    const separator = loginUrl.includes("?") ? "&" : "?";
+    window.location.href = `${loginUrl}${separator}proxy_base_url=${proxyBaseUrl}`;
   };
 
   // ------------------------------------------------------------------
