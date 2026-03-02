@@ -209,6 +209,7 @@ function Sidebar({
     ]},
     { title: "Network", items: [
       { icon: <UsersThree size={18} />, label: "Connections", href: "/connections" },
+      { icon: <ChatText size={18} />, label: "Messages", href: "/messages" },
       { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover", active: currentPath === "/discover" },
     ]},
   ];

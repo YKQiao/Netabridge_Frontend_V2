@@ -84,6 +84,7 @@ import {
   Gift,
   Buildings,
   Briefcase,
+  ChatText,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
@@ -279,6 +280,7 @@ function Sidebar({ currentPath = "/resources", mobileOpen = false, onMobileClose
     ]},
     { title: "Network", items: [
       { icon: <UsersThree size={18} />, label: "Connections", href: "/connections" },
+      { icon: <ChatText size={18} />, label: "Messages", href: "/messages" },
       { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
     ]},
   ];

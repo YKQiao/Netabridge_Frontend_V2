@@ -33,6 +33,7 @@ import {
   Question,
   ArrowsLeftRight,
   UserSwitch,
+  ChatText,
 } from "@phosphor-icons/react";
 import { LogoWithName } from "@/components/ui/Logo";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
@@ -324,6 +325,7 @@ function Sidebar({
       title: "Network",
       items: [
         { icon: <UsersThree size={18} weight="regular" />, label: "Connections", href: "/connections" },
+        { icon: <ChatText size={18} weight="regular" />, label: "Messages", href: "/messages" },
         { icon: <MagnifyingGlass size={18} weight="regular" />, label: "Discover", href: "/discover" },
       ],
     },

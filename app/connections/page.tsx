@@ -42,17 +42,16 @@ interface UserType {
 }
 
 interface Connection {
-  id: string;
-  requester_id: string;
-  target_id: string;
-  status: "PENDING" | "ACCEPTED" | "REJECTED" | "BLOCKED";
-  created_at: string;
-  updated_at: string;
-  user?: {
+  connection_id: string;
+  partner: {
     id: string;
     email: string;
     display_name: string;
+    entra_oid?: string;
+    created_at?: string;
   };
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "BLOCKED";
+  updated_at: string;
 }
 
 type ViewMode = "table" | "grid";
@@ -136,6 +135,7 @@ function Sidebar({
       title: "Network",
       items: [
         { icon: <UsersThree size={18} />, label: "Connections", href: "/connections", active: currentPath === "/connections" },
+        { icon: <ChatText size={18} />, label: "Messages", href: "/messages" },
         { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
       ],
     },
@@ -283,21 +283,22 @@ function ConnectionCard({ connection, onAccept, onReject }: {
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
 }) {
-  const user = connection.user;
+  const partner = connection.partner;
+  const router = useRouter();
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start gap-3">
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-lg font-semibold">
-          {(user?.display_name?.[0] || user?.email?.[0] || "?").toUpperCase()}
+          {(partner?.display_name?.[0] || partner?.email?.[0] || "?").toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div>
               <h3 className="text-[14px] font-semibold text-gray-900 truncate">
-                {user?.display_name || "Unknown User"}
+                {partner?.display_name || "Unknown User"}
               </h3>
-              <p className="text-[12px] text-gray-500 truncate">{user?.email}</p>
+              <p className="text-[12px] text-gray-500 truncate">{partner?.email}</p>
             </div>
             <StatusBadge status={connection.status} />
           </div>
@@ -305,14 +306,14 @@ function ConnectionCard({ connection, onAccept, onReject }: {
           {connection.status === "PENDING" && onAccept && onReject && (
             <div className="flex gap-2 mt-3">
               <button
-                onClick={() => onAccept(connection.id)}
+                onClick={() => onAccept(connection.connection_id)}
                 className="flex-1 px-3 py-1.5 bg-[#4A7DC4] text-white text-[12px] font-medium rounded hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-1"
               >
                 <Check size={14} weight="bold" />
                 Accept
               </button>
               <button
-                onClick={() => onReject(connection.id)}
+                onClick={() => onReject(connection.connection_id)}
                 className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-600 text-[12px] font-medium rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
               >
                 <X size={14} weight="bold" />
@@ -323,10 +324,18 @@ function ConnectionCard({ connection, onAccept, onReject }: {
 
           {connection.status === "ACCEPTED" && (
             <div className="flex gap-2 mt-3">
-              <button className="p-2 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors">
+              <a
+                href={`mailto:${partner?.email}`}
+                className="p-2 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors"
+                title="Send email"
+              >
                 <EnvelopeSimple size={16} />
-              </button>
-              <button className="p-2 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors">
+              </a>
+              <button
+                onClick={() => router.push(`/messages?user=${partner?.id}`)}
+                className="p-2 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors"
+                title="Send message"
+              >
                 <ChatText size={16} />
               </button>
             </div>
@@ -342,18 +351,19 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
 }) {
-  const user = connection.user;
+  const partner = connection.partner;
+  const router = useRouter();
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
       <td className="px-5 py-3.5">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-sm font-semibold">
-            {(user?.display_name?.[0] || user?.email?.[0] || "?").toUpperCase()}
+            {(partner?.display_name?.[0] || partner?.email?.[0] || "?").toUpperCase()}
           </div>
           <div>
-            <div className="text-[13px] font-semibold text-gray-900">{user?.display_name || "Unknown"}</div>
-            <div className="text-[12px] text-gray-500">{user?.email}</div>
+            <div className="text-[13px] font-semibold text-gray-900">{partner?.display_name || "Unknown"}</div>
+            <div className="text-[12px] text-gray-500">{partner?.email}</div>
           </div>
         </div>
       </td>
@@ -362,20 +372,20 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
       </td>
       <td className="px-5 py-3.5">
         <span className="text-[13px] text-gray-500">
-          {new Date(connection.created_at).toLocaleDateString()}
+          {new Date(connection.updated_at).toLocaleDateString()}
         </span>
       </td>
       <td className="px-5 py-3.5">
         {connection.status === "PENDING" && onAccept && onReject ? (
           <div className="flex gap-2">
             <button
-              onClick={() => onAccept(connection.id)}
+              onClick={() => onAccept(connection.connection_id)}
               className="px-3 py-1 bg-[#4A7DC4] text-white text-[11px] font-medium rounded hover:bg-[#3A5A8C] transition-colors"
             >
               Accept
             </button>
             <button
-              onClick={() => onReject(connection.id)}
+              onClick={() => onReject(connection.connection_id)}
               className="px-3 py-1 border border-gray-300 text-gray-600 text-[11px] font-medium rounded hover:bg-gray-50 transition-colors"
             >
               Decline
@@ -383,10 +393,18 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
           </div>
         ) : (
           <div className="flex gap-1">
-            <button className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors">
+            <a
+              href={`mailto:${partner?.email}`}
+              className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors"
+              title="Send email"
+            >
               <EnvelopeSimple size={16} />
-            </button>
-            <button className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors">
+            </a>
+            <button
+              onClick={() => router.push(`/messages?user=${partner?.id}`)}
+              className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-[#EEF4FB] rounded transition-colors"
+              title="Send message"
+            >
               <ChatText size={16} />
             </button>
             <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
@@ -501,218 +519,18 @@ function InviteModal({ isOpen, onClose, onInvite, userEmail }: {
 }
 
 // =============================================================================
-// Add Contact Modal (Manual Entry - No Invite)
-// =============================================================================
-
-interface ContactFormData {
-  name: string;
-  email: string;
-  company: string;
-  role: string;
-  phone: string;
-  notes: string;
-}
-
-function AddContactModal({ isOpen, onClose, onAdd }: {
-  isOpen: boolean;
-  onClose: () => void;
-  onAdd: (data: ContactFormData) => Promise<{ success: boolean; error?: string }>;
-}) {
-  const [formData, setFormData] = useState<ContactFormData>({
-    name: "",
-    email: "",
-    company: "",
-    role: "",
-    phone: "",
-    notes: "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name) return;
-
-    setError("");
-    setSaving(true);
-    const result = await onAdd(formData);
-    setSaving(false);
-
-    if (result.success) {
-      setFormData({ name: "", email: "", company: "", role: "", phone: "", notes: "" });
-      onClose();
-    } else {
-      setError(result.error || "Failed to add contact");
-    }
-  };
-
-  const handleClose = () => {
-    setFormData({ name: "", email: "", company: "", role: "", phone: "", notes: "" });
-    setError("");
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="text-[18px] font-semibold text-gray-900">Add Contact</h2>
-            <p className="text-[13px] text-gray-500 mt-0.5">Add contact details directly without sending an invite</p>
-          </div>
-          <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-600">
-            <X size={20} />
-          </button>
-        </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2 text-[13px] text-red-700">
-            <Warning size={16} weight="fill" />
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name - Required */}
-          <div>
-            <label className="block text-[13px] font-medium text-gray-700 mb-1">
-              Full Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="John Smith"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
-              required
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block text-[13px] font-medium text-gray-700 mb-1">
-              Email Address
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="john@company.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
-            />
-          </div>
-
-          {/* Company & Role - Two columns */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[13px] font-medium text-gray-700 mb-1">
-                Company
-              </label>
-              <input
-                type="text"
-                value={formData.company}
-                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                placeholder="Acme Corp"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
-              />
-            </div>
-            <div>
-              <label className="block text-[13px] font-medium text-gray-700 mb-1">
-                Role / Title
-              </label>
-              <input
-                type="text"
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                placeholder="Sales Manager"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
-              />
-            </div>
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="block text-[13px] font-medium text-gray-700 mb-1">
-              Phone Number
-            </label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+1 (555) 123-4567"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-[13px] font-medium text-gray-700 mb-1">
-              Notes
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="How you met, what they specialize in, etc."
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4] resize-none"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !formData.name}
-              className="flex-1 px-4 py-2.5 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-lg hover:bg-[#3A5A8C] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {saving ? "Saving..." : "Add Contact"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
 // Main Page
 // =============================================================================
-
-// Local contact type (stored in localStorage)
-interface LocalContact {
-  id: string;
-  name: string;
-  email: string;
-  company: string;
-  role: string;
-  phone: string;
-  notes: string;
-  created_at: string;
-}
-
-const LOCAL_CONTACTS_KEY = "netabridge_local_contacts";
 
 export default function ConnectionsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, logout: handleLogout } = useAuth();
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [localContacts, setLocalContacts] = useState<LocalContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [showStats, setShowStats] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
@@ -726,20 +544,6 @@ export default function ConnectionsPage() {
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setShowStats(false);
-    }
-  }, []);
-
-  // Load local contacts from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem(LOCAL_CONTACTS_KEY);
-        if (stored) {
-          setLocalContacts(JSON.parse(stored));
-        }
-      } catch (e) {
-        console.error("Failed to load local contacts:", e);
-      }
     }
   }, []);
 
@@ -770,7 +574,7 @@ export default function ConnectionsPage() {
     try {
       await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "ACCEPTED" });
       setConnections(prev =>
-        prev.map(c => c.id === connectionId ? { ...c, status: "ACCEPTED" } : c)
+        prev.map(c => c.connection_id === connectionId ? { ...c, status: "ACCEPTED" } : c)
       );
     } catch (error) {
       console.error("Failed to accept:", error);
@@ -781,86 +585,36 @@ export default function ConnectionsPage() {
     try {
       await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "REJECTED" });
       setConnections(prev =>
-        prev.map(c => c.id === connectionId ? { ...c, status: "REJECTED" } : c)
+        prev.map(c => c.connection_id === connectionId ? { ...c, status: "REJECTED" } : c)
       );
     } catch (error) {
       console.error("Failed to reject:", error);
     }
   };
 
-  const handleAddContact = async (data: ContactFormData): Promise<{ success: boolean; error?: string }> => {
-    try {
-      // Save to local storage (no backend endpoint)
-      const newContact: LocalContact = {
-        id: `local_${Date.now()}`,
-        name: data.name,
-        email: data.email,
-        company: data.company,
-        role: data.role,
-        phone: data.phone,
-        notes: data.notes,
-        created_at: new Date().toISOString(),
-      };
-
-      const updatedContacts = [...localContacts, newContact];
-      setLocalContacts(updatedContacts);
-
-      // Persist to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem(LOCAL_CONTACTS_KEY, JSON.stringify(updatedContacts));
-      }
-
-      return { success: true };
-    } catch (error: any) {
-      console.error("Failed to add contact:", error);
-      return { success: false, error: error.message || "Failed to add contact" };
-    }
-  };
-
-  // Convert local contacts to Connection format for unified display
-  const localContactsAsConnections: Connection[] = localContacts.map(c => ({
-    id: c.id,
-    requester_id: user?.id || "",
-    target_id: c.id,
-    status: "ACCEPTED" as const,
-    created_at: c.created_at,
-    updated_at: c.created_at,
-    user: {
-      id: c.id,
-      email: c.email,
-      display_name: c.name,
-    },
-    // Extra fields for local contacts
-    _isLocal: true,
-    _localData: c,
-  })) as (Connection & { _isLocal?: boolean; _localData?: LocalContact })[];
-
-  // Merge API connections with local contacts
-  const allConnections = [...connections, ...localContactsAsConnections];
-
   // Filter connections
-  const filteredConnections = allConnections.filter(c => {
+  const filteredConnections = connections.filter(c => {
     if (statusFilter !== "all" && c.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const name = c.user?.display_name?.toLowerCase() || "";
-      const email = c.user?.email?.toLowerCase() || "";
+      const name = c.partner?.display_name?.toLowerCase() || "";
+      const email = c.partner?.email?.toLowerCase() || "";
       if (!name.includes(q) && !email.includes(q)) return false;
     }
     return true;
   });
 
   // Stats
-  const pendingCount = allConnections.filter(c => c.status === "PENDING").length;
-  const acceptedCount = allConnections.filter(c => c.status === "ACCEPTED").length;
+  const pendingCount = connections.filter(c => c.status === "PENDING").length;
+  const acceptedCount = connections.filter(c => c.status === "ACCEPTED").length;
 
   // Calculate "new this month" from actual data
   const thisMonth = new Date();
   thisMonth.setDate(1);
   thisMonth.setHours(0, 0, 0, 0);
-  const newThisMonth = allConnections.filter(c => {
-    const created = new Date(c.created_at);
-    return c.status === "ACCEPTED" && created >= thisMonth;
+  const newThisMonth = connections.filter(c => {
+    const updated = new Date(c.updated_at);
+    return c.status === "ACCEPTED" && updated >= thisMonth;
   }).length;
 
   return (
@@ -895,24 +649,14 @@ export default function ConnectionsPage() {
                   Manage your network of {acceptedCount} connections
                 </p>
               </div>
-              <div className="flex gap-2 sm:gap-3">
-                <button
-                  onClick={() => setShowAddContactModal(true)}
-                  className="px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 text-[13px] sm:text-[14px] font-medium rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
-                >
-                  <Plus size={18} />
-                  <span className="hidden sm:inline">Add Contact</span>
-                  <span className="sm:hidden">Add</span>
-                </button>
-                <button
-                  onClick={() => setShowInviteModal(true)}
-                  className="px-3 sm:px-4 py-2 bg-[#4A7DC4] text-white text-[13px] sm:text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
-                >
-                  <Plus size={18} weight="bold" />
-                  <span className="hidden sm:inline">Invite Connection</span>
-                  <span className="sm:hidden">Invite</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="px-3 sm:px-4 py-2 bg-[#4A7DC4] text-white text-[13px] sm:text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
+              >
+                <Plus size={18} weight="bold" />
+                <span className="hidden sm:inline">Invite Connection</span>
+                <span className="sm:hidden">Invite</span>
+              </button>
             </div>
 
             {/* Stats - Collapsible */}
@@ -1028,7 +772,7 @@ export default function ConnectionsPage() {
                       ) : (
                         filteredConnections.map((conn) => (
                           <ConnectionTableRow
-                            key={conn.id}
+                            key={conn.connection_id}
                             connection={conn}
                             onAccept={conn.status === "PENDING" ? handleAccept : undefined}
                             onReject={conn.status === "PENDING" ? handleReject : undefined}
@@ -1050,7 +794,7 @@ export default function ConnectionsPage() {
                     <div className="grid grid-cols-1 gap-3">
                       {filteredConnections.map((conn) => (
                         <ConnectionCard
-                          key={conn.id}
+                          key={conn.connection_id}
                           connection={conn}
                           onAccept={conn.status === "PENDING" ? handleAccept : undefined}
                           onReject={conn.status === "PENDING" ? handleReject : undefined}
@@ -1072,7 +816,7 @@ export default function ConnectionsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredConnections.map((conn) => (
                       <ConnectionCard
-                        key={conn.id}
+                        key={conn.connection_id}
                         connection={conn}
                         onAccept={conn.status === "PENDING" ? handleAccept : undefined}
                         onReject={conn.status === "PENDING" ? handleReject : undefined}
@@ -1092,12 +836,6 @@ export default function ConnectionsPage() {
         onClose={() => setShowInviteModal(false)}
         onInvite={handleInvite}
         userEmail={user?.email || ""}
-      />
-
-      <AddContactModal
-        isOpen={showAddContactModal}
-        onClose={() => setShowAddContactModal(false)}
-        onAdd={handleAddContact}
       />
     </div>
   );
