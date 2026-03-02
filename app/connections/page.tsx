@@ -690,7 +690,7 @@ export default function ConnectionsPage() {
   const knownSentRef = useRef<Set<string>>(new Set());
 
   // Fetch connections, preserving locally-known direction
-  const fetchConnections = useCallback(async () => {
+  const fetchConnections = useCallback(async (isBackground = false) => {
     try {
       const data = await apiClient.get<Connection[]>("/api/v1/connections");
       const list = Array.isArray(data) ? data : [];
@@ -703,6 +703,7 @@ export default function ConnectionsPage() {
         return c;
       }));
     } catch (err: any) {
+      // On background polls, don't wipe state — just flag the error
       if (err.status !== 401) {
         setFetchError(err.message || "Failed to load connections");
       }
@@ -717,7 +718,7 @@ export default function ConnectionsPage() {
   // Poll for new connections every 15s
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(fetchConnections, 15000);
+    const interval = setInterval(() => fetchConnections(true), 15000);
     return () => clearInterval(interval);
   }, [user, fetchConnections]);
 
@@ -747,8 +748,14 @@ export default function ConnectionsPage() {
         return { success: false, error: `Connection already exists (${state})` };
       }
 
+      // Mark this as "sent by me" so the sender never sees Accept/Reject on their own invite
+      if (result.connection_id) {
+        knownSentRef.current.add(result.connection_id);
+      }
+
       // Refresh the list
       await fetchConnections();
+      setActionSuccess("Invite sent!");
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message || "Failed to send invite" };
@@ -882,7 +889,7 @@ export default function ConnectionsPage() {
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-2 text-[13px] text-amber-700">
                 <Warning size={16} weight="fill" className="flex-shrink-0" />
                 <span className="flex-1">{fetchError}</span>
-                <button onClick={fetchConnections} className="px-2 py-1 text-[12px] font-medium bg-amber-100 rounded hover:bg-amber-200 transition-colors">
+                <button onClick={() => fetchConnections()} className="px-2 py-1 text-[12px] font-medium bg-amber-100 rounded hover:bg-amber-200 transition-colors">
                   Retry
                 </button>
               </div>
