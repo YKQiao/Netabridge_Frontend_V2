@@ -1429,7 +1429,17 @@ export default function ChatPage() {
               if (line.startsWith("data: ")) {
                 const data = line.slice(6);
                 if (data === "[DONE]" || data.includes("Stream finished")) continue;
-                assistantText += data;
+                
+                let chunkText = data;
+                try {
+                  const parsedChunk = JSON.parse(data);
+                  if (parsedChunk && parsedChunk.content && typeof parsedChunk.content.text === 'string') {
+                    chunkText = parsedChunk.content.text;
+                  }
+                } catch (e) {
+                  // If not JSON, fall back to returning raw data string (legacy fallback)
+                }
+                assistantText += chunkText;
                 setMessages(prev => {
                   const updated = [...prev];
                   const lastIdx = updated.length - 1;
