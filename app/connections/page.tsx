@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { apiClient } from "@/lib/api/client";
@@ -678,11 +678,22 @@ export default function ConnectionsPage() {
     }
   }, []);
 
-  // Fetch connections
+  // Track connections where we've learned (via 403) that we are the requester.
+  // Persists across re-fetches so the backend's missing field doesn't undo our local knowledge.
+  const knownSentRef = useRef<Set<string>>(new Set());
+
+  // Fetch connections, preserving locally-known direction
   const fetchConnections = useCallback(async () => {
     try {
       const data = await apiClient.get<Connection[]>("/api/v1/connections");
-      setConnections(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      // Merge in locally-known direction for backends that don't yet return initiated_by_me
+      setConnections(list.map(c => {
+        if (c.initiated_by_me === undefined && knownSentRef.current.has(c.connection_id)) {
+          return { ...c, initiated_by_me: true };
+        }
+        return c;
+      }));
     } catch {
       // Silently fail on fetch
     }
@@ -730,15 +741,16 @@ export default function ConnectionsPage() {
       );
     } catch (error: any) {
       if (error.status === 403) {
-        // 403 = user is the requester, not the target → mark locally
+        // 403 = user is the requester, not the target → mark locally and persist across re-fetches
+        knownSentRef.current.add(connectionId);
         setConnections(prev =>
           prev.map(c => c.connection_id === connectionId ? { ...c, initiated_by_me: true } : c)
         );
         setActionError("You sent this invite — only the recipient can accept or decline.");
       } else {
         setActionError(error.message || "Failed to accept connection");
+        fetchConnections();
       }
-      fetchConnections();
     }
   };
 
@@ -751,14 +763,15 @@ export default function ConnectionsPage() {
       );
     } catch (error: any) {
       if (error.status === 403) {
+        knownSentRef.current.add(connectionId);
         setConnections(prev =>
           prev.map(c => c.connection_id === connectionId ? { ...c, initiated_by_me: true } : c)
         );
         setActionError("You sent this invite — only the recipient can accept or decline.");
       } else {
         setActionError(error.message || "Failed to decline connection");
+        fetchConnections();
       }
-      fetchConnections();
     }
   };
 
