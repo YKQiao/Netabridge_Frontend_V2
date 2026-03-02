@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { apiClient } from "@/lib/api/client";
@@ -25,6 +25,10 @@ import {
   Warning,
   CaretLeft,
   CaretRight,
+  Trash,
+  PaperPlaneTilt,
+  Clock,
+  XCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
@@ -52,6 +56,8 @@ interface Connection {
   };
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "BLOCKED";
   updated_at: string;
+  /** Present after backend adds direction field; undefined on older backend */
+  initiated_by_me?: boolean;
 }
 
 type ViewMode = "table" | "grid";
@@ -73,9 +79,7 @@ function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
       className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      {/* Left Side: Hamburger (mobile) + Logo */}
       <div className="flex items-center gap-3">
-        {/* Hamburger Menu Button (Mobile Only) */}
         <button
           onClick={onMenuClick}
           className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
@@ -174,7 +178,6 @@ function Sidebar({
         ))}
       </div>
 
-      {/* Collapse Toggle Button (Desktop only) */}
       {onToggle && (
         <div className="hidden md:block px-3 pb-4 border-t border-gray-100 pt-4">
           <button
@@ -201,7 +204,6 @@ function Sidebar({
 
   return (
     <>
-      {/* Mobile Overlay Backdrop */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
@@ -209,7 +211,6 @@ function Sidebar({
         />
       )}
 
-      {/* Desktop Sidebar */}
       <aside
         className={`
           hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto overflow-x-hidden
@@ -220,7 +221,6 @@ function Sidebar({
         {sidebarContent}
       </aside>
 
-      {/* Mobile Sidebar (Overlay) */}
       <aside
         className={`
           fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
@@ -228,7 +228,6 @@ function Sidebar({
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
-        {/* Mobile Header with Close Button */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <LogoWithName variant="color" size="sm" />
           <button
@@ -248,7 +247,27 @@ function Sidebar({
 // Connection Components
 // =============================================================================
 
-function StatusBadge({ status }: { status: Connection["status"] }) {
+function StatusBadge({ status, initiatedByMe }: { status: Connection["status"]; initiatedByMe?: boolean }) {
+  if (status === "PENDING" && initiatedByMe === true) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700">
+        <PaperPlaneTilt size={12} weight="fill" />
+        Sent
+      </span>
+    );
+  }
+
+  if (status === "PENDING" && initiatedByMe === false) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700">
+        <Clock size={12} weight="fill" />
+        Received
+      </span>
+    );
+  }
+
+  // initiatedByMe === undefined → backend hasn't been updated yet, show generic Pending
+
   const styles = {
     ACCEPTED: "bg-emerald-50 text-emerald-700",
     PENDING: "bg-amber-50 text-amber-700",
@@ -278,13 +297,17 @@ function StatusBadge({ status }: { status: Connection["status"] }) {
   );
 }
 
-function ConnectionCard({ connection, onAccept, onReject }: {
+function ConnectionCard({ connection, onAccept, onReject, onDelete }: {
   connection: Connection;
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }) {
   const partner = connection.partner;
   const router = useRouter();
+  const isPendingSent = connection.status === "PENDING" && connection.initiated_by_me === true;
+  // Show accept/reject when: received invite (direction known) OR direction unknown (fallback — 403 will correct it)
+  const isPendingReceived = connection.status === "PENDING" && !isPendingSent;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -300,10 +323,11 @@ function ConnectionCard({ connection, onAccept, onReject }: {
               </h3>
               <p className="text-[12px] text-gray-500 truncate">{partner?.email}</p>
             </div>
-            <StatusBadge status={connection.status} />
+            <StatusBadge status={connection.status} initiatedByMe={connection.initiated_by_me} />
           </div>
 
-          {connection.status === "PENDING" && onAccept && onReject && (
+          {/* Received invite (or unknown direction) → Accept / Decline */}
+          {isPendingReceived && onAccept && onReject && (
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => onAccept(connection.connection_id)}
@@ -322,6 +346,36 @@ function ConnectionCard({ connection, onAccept, onReject }: {
             </div>
           )}
 
+          {/* Sent invite → Cancel */}
+          {isPendingSent && onDelete && (
+            <div className="flex gap-2 mt-3">
+              <span className="flex-1 text-[12px] text-gray-400 flex items-center">
+                Awaiting response...
+              </span>
+              <button
+                onClick={() => onDelete(connection.connection_id)}
+                className="px-3 py-1.5 border border-red-200 text-red-600 text-[12px] font-medium rounded hover:bg-red-50 transition-colors flex items-center gap-1"
+              >
+                <XCircle size={14} />
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* Rejected → Delete */}
+          {connection.status === "REJECTED" && onDelete && (
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => onDelete(connection.connection_id)}
+                className="px-3 py-1.5 border border-red-200 text-red-600 text-[12px] font-medium rounded hover:bg-red-50 transition-colors flex items-center gap-1"
+              >
+                <Trash size={14} />
+                Remove
+              </button>
+            </div>
+          )}
+
+          {/* Accepted → Actions */}
           {connection.status === "ACCEPTED" && (
             <div className="flex gap-2 mt-3">
               <a
@@ -338,6 +392,15 @@ function ConnectionCard({ connection, onAccept, onReject }: {
               >
                 <ChatText size={16} />
               </button>
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(connection.connection_id)}
+                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors ml-auto"
+                  title="Remove connection"
+                >
+                  <Trash size={16} />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -346,13 +409,16 @@ function ConnectionCard({ connection, onAccept, onReject }: {
   );
 }
 
-function ConnectionTableRow({ connection, onAccept, onReject }: {
+function ConnectionTableRow({ connection, onAccept, onReject, onDelete }: {
   connection: Connection;
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }) {
   const partner = connection.partner;
   const router = useRouter();
+  const isPendingSent = connection.status === "PENDING" && connection.initiated_by_me === true;
+  const isPendingReceived = connection.status === "PENDING" && !isPendingSent;
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
@@ -368,7 +434,7 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
         </div>
       </td>
       <td className="px-5 py-3.5">
-        <StatusBadge status={connection.status} />
+        <StatusBadge status={connection.status} initiatedByMe={connection.initiated_by_me} />
       </td>
       <td className="px-5 py-3.5">
         <span className="text-[13px] text-gray-500">
@@ -376,7 +442,8 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
         </span>
       </td>
       <td className="px-5 py-3.5">
-        {connection.status === "PENDING" && onAccept && onReject ? (
+        {/* Received invite → Accept / Decline */}
+        {isPendingReceived && onAccept && onReject ? (
           <div className="flex gap-2">
             <button
               onClick={() => onAccept(connection.connection_id)}
@@ -391,6 +458,27 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
               Decline
             </button>
           </div>
+        ) : isPendingSent && onDelete ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-400">Awaiting response</span>
+            <button
+              onClick={() => onDelete(connection.connection_id)}
+              className="px-2 py-1 text-red-500 text-[11px] font-medium rounded hover:bg-red-50 transition-colors flex items-center gap-1"
+              title="Cancel invite"
+            >
+              <XCircle size={14} />
+              Cancel
+            </button>
+          </div>
+        ) : connection.status === "REJECTED" && onDelete ? (
+          <button
+            onClick={() => onDelete(connection.connection_id)}
+            className="px-2 py-1 text-red-500 text-[11px] font-medium rounded hover:bg-red-50 transition-colors flex items-center gap-1"
+            title="Remove"
+          >
+            <Trash size={14} />
+            Remove
+          </button>
         ) : (
           <div className="flex gap-1">
             <a
@@ -407,9 +495,15 @@ function ConnectionTableRow({ connection, onAccept, onReject }: {
             >
               <ChatText size={16} />
             </button>
-            <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
-              <DotsThree size={16} weight="bold" />
-            </button>
+            {onDelete && (
+              <button
+                onClick={() => onDelete(connection.connection_id)}
+                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                title="Remove connection"
+              >
+                <Trash size={16} />
+              </button>
+            )}
           </div>
         )}
       </td>
@@ -493,7 +587,7 @@ function InviteModal({ isOpen, onClose, onInvite, userEmail }: {
               required
             />
             <p className="mt-1 text-[12px] text-gray-500">
-              They'll receive an invitation to connect with you on NetaBridge.
+              They must have a NetaBridge account to receive your invite.
             </p>
           </div>
           <div className="flex gap-3">
@@ -518,6 +612,41 @@ function InviteModal({ isOpen, onClose, onInvite, userEmail }: {
   );
 }
 
+// Confirm dialog for destructive actions
+function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+        <h3 className="text-[16px] font-semibold text-gray-900 mb-2">{title}</h3>
+        <p className="text-[13px] text-gray-600 mb-5">{message}</p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[13px] font-medium rounded-md hover:bg-gray-50 transition-colors"
+          >
+            Keep
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 bg-red-600 text-white text-[13px] font-medium rounded-md hover:bg-red-700 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // =============================================================================
 // Main Page
 // =============================================================================
@@ -534,6 +663,8 @@ export default function ConnectionsPage() {
   const [showStats, setShowStats] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -547,49 +678,112 @@ export default function ConnectionsPage() {
     }
   }, []);
 
-  // Fetch connections after auth is ready
+  // Fetch connections
+  const fetchConnections = useCallback(async () => {
+    try {
+      const data = await apiClient.get<Connection[]>("/api/v1/connections");
+      setConnections(Array.isArray(data) ? data : []);
+    } catch {
+      // Silently fail on fetch
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
-    apiClient
-      .get<Connection[]>("/api/v1/connections")
-      .then((data) => setConnections(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user]);
+    fetchConnections().finally(() => setLoading(false));
+  }, [user, fetchConnections]);
+
+  // Auto-dismiss error after 5s
+  useEffect(() => {
+    if (!actionError) return;
+    const t = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(t);
+  }, [actionError]);
 
   const handleInvite = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      await apiClient.post("/api/v1/connections/invite", { target_email: email });
-      // Refresh connections
-      const data = await apiClient.get<Connection[]>("/api/v1/connections");
-      setConnections(Array.isArray(data) ? data : []);
+      const result = await apiClient.post<{ status: string; connection_status?: string; connection_id?: string }>(
+        "/api/v1/connections/invite",
+        { target_email: email }
+      );
+
+      // Backend returns {status: "exists", connection_status: "..."} for duplicates
+      if (result.status === "exists") {
+        const state = result.connection_status?.toLowerCase() || "unknown";
+        return { success: false, error: `Connection already exists (${state})` };
+      }
+
+      // Refresh the list
+      await fetchConnections();
       return { success: true };
     } catch (error: any) {
-      console.error("Failed to send invite:", error);
       return { success: false, error: error.message || "Failed to send invite" };
     }
   };
 
   const handleAccept = async (connectionId: string) => {
+    setActionError(null);
     try {
       await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "ACCEPTED" });
       setConnections(prev =>
-        prev.map(c => c.connection_id === connectionId ? { ...c, status: "ACCEPTED" } : c)
+        prev.map(c => c.connection_id === connectionId ? { ...c, status: "ACCEPTED" as const } : c)
       );
-    } catch (error) {
-      console.error("Failed to accept:", error);
+    } catch (error: any) {
+      if (error.status === 403) {
+        // 403 = user is the requester, not the target → mark locally
+        setConnections(prev =>
+          prev.map(c => c.connection_id === connectionId ? { ...c, initiated_by_me: true } : c)
+        );
+        setActionError("You sent this invite — only the recipient can accept or decline.");
+      } else {
+        setActionError(error.message || "Failed to accept connection");
+      }
+      fetchConnections();
     }
   };
 
   const handleReject = async (connectionId: string) => {
+    setActionError(null);
     try {
       await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "REJECTED" });
       setConnections(prev =>
-        prev.map(c => c.connection_id === connectionId ? { ...c, status: "REJECTED" } : c)
+        prev.map(c => c.connection_id === connectionId ? { ...c, status: "REJECTED" as const } : c)
       );
-    } catch (error) {
-      console.error("Failed to reject:", error);
+    } catch (error: any) {
+      if (error.status === 403) {
+        setConnections(prev =>
+          prev.map(c => c.connection_id === connectionId ? { ...c, initiated_by_me: true } : c)
+        );
+        setActionError("You sent this invite — only the recipient can accept or decline.");
+      } else {
+        setActionError(error.message || "Failed to decline connection");
+      }
+      fetchConnections();
     }
+  };
+
+  const handleDelete = async (connectionId: string) => {
+    setActionError(null);
+    try {
+      await apiClient.delete(`/api/v1/connections/${connectionId}`);
+      setConnections(prev => prev.filter(c => c.connection_id !== connectionId));
+      setConfirmDelete(null);
+    } catch (error: any) {
+      // 405 = endpoint doesn't exist yet on current backend
+      if (error.status === 405 || error.message?.includes("Method Not Allowed")) {
+        setActionError("Delete not available yet — backend update required.");
+      } else {
+        setActionError(error.message || "Failed to delete connection");
+      }
+      setConfirmDelete(null);
+      fetchConnections();
+    }
+  };
+
+  const requestDelete = (connectionId: string) => {
+    const conn = connections.find(c => c.connection_id === connectionId);
+    const name = conn?.partner?.display_name || conn?.partner?.email || "this connection";
+    setConfirmDelete({ id: connectionId, name });
   };
 
   // Filter connections
@@ -607,15 +801,8 @@ export default function ConnectionsPage() {
   // Stats
   const pendingCount = connections.filter(c => c.status === "PENDING").length;
   const acceptedCount = connections.filter(c => c.status === "ACCEPTED").length;
-
-  // Calculate "new this month" from actual data
-  const thisMonth = new Date();
-  thisMonth.setDate(1);
-  thisMonth.setHours(0, 0, 0, 0);
-  const newThisMonth = connections.filter(c => {
-    const updated = new Date(c.updated_at);
-    return c.status === "ACCEPTED" && updated >= thisMonth;
-  }).length;
+  const sentCount = connections.filter(c => c.status === "PENDING" && c.initiated_by_me === true).length;
+  const receivedCount = connections.filter(c => c.status === "PENDING" && c.initiated_by_me === false).length;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
@@ -641,12 +828,26 @@ export default function ConnectionsPage() {
         ) : (
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 md:p-6 max-w-[1400px]">
+            {/* Error Banner */}
+            {actionError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2 text-[13px] text-red-700 animate-fade-in">
+                <Warning size={16} weight="fill" className="flex-shrink-0" />
+                <span className="flex-1">{actionError}</span>
+                <button
+                  onClick={() => setActionError(null)}
+                  className="p-1 text-red-400 hover:text-red-600"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Page Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
                 <h1 className="text-[20px] md:text-[24px] font-semibold text-gray-900">Connections</h1>
                 <p className="text-[13px] md:text-[14px] text-gray-500 mt-1">
-                  Manage your network of {acceptedCount} connections
+                  Manage your network of {acceptedCount} connection{acceptedCount !== 1 ? "s" : ""}
                 </p>
               </div>
               <button
@@ -659,11 +860,11 @@ export default function ConnectionsPage() {
               </button>
             </div>
 
-            {/* Stats - Collapsible */}
+            {/* Stats */}
             {showStats && (
-              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+              <div className="grid grid-cols-4 gap-2 sm:gap-4 mb-6">
                 <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
-                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Total</div>
+                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Connected</div>
                   <div className="text-[18px] sm:text-[24px] font-semibold text-gray-900">{acceptedCount}</div>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
@@ -671,15 +872,18 @@ export default function ConnectionsPage() {
                   <div className="text-[18px] sm:text-[24px] font-semibold text-amber-600">{pendingCount}</div>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
-                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">New</div>
-                  <div className="text-[18px] sm:text-[24px] font-semibold text-emerald-600">+{newThisMonth}</div>
+                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Sent</div>
+                  <div className="text-[18px] sm:text-[24px] font-semibold text-blue-600">{sentCount}</div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
+                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">To Review</div>
+                  <div className="text-[18px] sm:text-[24px] font-semibold text-emerald-600">{receivedCount}</div>
                 </div>
               </div>
             )}
 
-            {/* Toolbar - Search left, filters and controls right */}
+            {/* Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6">
-              {/* Left: Search */}
               <div className="relative w-full sm:w-80">
                 <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -691,9 +895,7 @@ export default function ConnectionsPage() {
                 />
               </div>
 
-              {/* Right: Filters, View, Stats Toggle */}
               <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto">
-                {/* Status Filter */}
                 <div className="flex gap-1 bg-gray-100 rounded-md p-1 flex-shrink-0">
                   {[
                     { key: "all", label: "All" },
@@ -716,7 +918,6 @@ export default function ConnectionsPage() {
 
                 <div className="hidden sm:block w-px h-6 bg-gray-200 flex-shrink-0" />
 
-                {/* View toggle */}
                 <div className="flex gap-1 bg-gray-100 rounded-md p-1 flex-shrink-0">
                   <button
                     onClick={() => setViewMode("table")}
@@ -734,7 +935,6 @@ export default function ConnectionsPage() {
                   </button>
                 </div>
 
-                {/* Stats toggle */}
                 <button
                   onClick={() => setShowStats(!showStats)}
                   className={`p-2 rounded-md transition-colors ${showStats ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
@@ -746,17 +946,15 @@ export default function ConnectionsPage() {
             </div>
 
             {/* Content */}
-            {/* On mobile, always show grid view. On desktop, respect viewMode */}
             {viewMode === "table" ? (
               <>
-                {/* Table view - hidden on mobile */}
                 <div className="hidden md:block bg-white border border-gray-200 rounded-md overflow-hidden">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200">
                         <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contact</th>
                         <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
-                        <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Connected</th>
+                        <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Date</th>
                         <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Actions</th>
                       </tr>
                     </thead>
@@ -774,15 +972,16 @@ export default function ConnectionsPage() {
                           <ConnectionTableRow
                             key={conn.connection_id}
                             connection={conn}
-                            onAccept={conn.status === "PENDING" ? handleAccept : undefined}
-                            onReject={conn.status === "PENDING" ? handleReject : undefined}
+                            onAccept={handleAccept}
+                            onReject={handleReject}
+                            onDelete={requestDelete}
                           />
                         ))
                       )}
                     </tbody>
                   </table>
                 </div>
-                {/* Mobile fallback - show cards */}
+                {/* Mobile fallback */}
                 <div className="md:hidden">
                   {filteredConnections.length === 0 ? (
                     <div className="bg-white border border-gray-200 rounded-md py-12 text-center text-gray-500">
@@ -796,8 +995,9 @@ export default function ConnectionsPage() {
                         <ConnectionCard
                           key={conn.connection_id}
                           connection={conn}
-                          onAccept={conn.status === "PENDING" ? handleAccept : undefined}
-                          onReject={conn.status === "PENDING" ? handleReject : undefined}
+                          onAccept={handleAccept}
+                          onReject={handleReject}
+                          onDelete={requestDelete}
                         />
                       ))}
                     </div>
@@ -818,8 +1018,9 @@ export default function ConnectionsPage() {
                       <ConnectionCard
                         key={conn.connection_id}
                         connection={conn}
-                        onAccept={conn.status === "PENDING" ? handleAccept : undefined}
-                        onReject={conn.status === "PENDING" ? handleReject : undefined}
+                        onAccept={handleAccept}
+                        onReject={handleReject}
+                        onDelete={requestDelete}
                       />
                     ))}
                   </div>
@@ -836,6 +1037,14 @@ export default function ConnectionsPage() {
         onClose={() => setShowInviteModal(false)}
         onInvite={handleInvite}
         userEmail={user?.email || ""}
+      />
+
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        title="Delete Connection"
+        message={`Are you sure you want to remove ${confirmDelete?.name}? This cannot be undone.`}
+        onConfirm={() => confirmDelete && handleDelete(confirmDelete.id)}
+        onCancel={() => setConfirmDelete(null)}
       />
     </div>
   );

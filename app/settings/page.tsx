@@ -199,7 +199,7 @@ function TextInput({
           w-full px-3 py-2.5 text-[13px] border rounded-md transition-colors
           ${icon ? "pl-10" : ""}
           ${disabled
-            ? "bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200"
+            ? "bg-gray-50 text-gray-700 cursor-not-allowed border-gray-200"
             : error
               ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
               : "border-gray-300 focus:border-[#4A7DC4] focus:ring-1 focus:ring-[#4A7DC4]/20"

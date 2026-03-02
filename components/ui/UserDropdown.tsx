@@ -59,7 +59,7 @@ export function UserDropdown({ user, onLogout }: UserDropdownProps) {
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Account</span>
               </div>
               <Link
-                href="/profile"
+                href="/settings"
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
                 onClick={() => setIsOpen(false)}
               >

@@ -95,7 +95,7 @@ function UserDropdown({ user, onLogout }: { user: any; onLogout: () => void }) {
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Account</span>
               </div>
               <a
-                href="/profile"
+                href="/settings"
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
