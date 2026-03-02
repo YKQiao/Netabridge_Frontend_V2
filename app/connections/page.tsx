@@ -297,16 +297,16 @@ function StatusBadge({ status, initiatedByMe }: { status: Connection["status"]; 
   );
 }
 
-function ConnectionCard({ connection, onAccept, onReject, onDelete }: {
+function ConnectionCard({ connection, onAccept, onReject, onDelete, busy }: {
   connection: Connection;
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
   onDelete?: (id: string) => void;
+  busy?: boolean;
 }) {
   const partner = connection.partner;
   const router = useRouter();
   const isPendingSent = connection.status === "PENDING" && connection.initiated_by_me === true;
-  // Show accept/reject when: received invite (direction known) OR direction unknown (fallback — 403 will correct it)
   const isPendingReceived = connection.status === "PENDING" && !isPendingSent;
 
   return (
@@ -326,19 +326,20 @@ function ConnectionCard({ connection, onAccept, onReject, onDelete }: {
             <StatusBadge status={connection.status} initiatedByMe={connection.initiated_by_me} />
           </div>
 
-          {/* Received invite (or unknown direction) → Accept / Decline */}
           {isPendingReceived && onAccept && onReject && (
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => onAccept(connection.connection_id)}
-                className="flex-1 px-3 py-1.5 bg-[#4A7DC4] text-white text-[12px] font-medium rounded hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-1"
+                disabled={busy}
+                className="flex-1 px-3 py-1.5 bg-[#4A7DC4] text-white text-[12px] font-medium rounded hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
               >
                 <Check size={14} weight="bold" />
                 Accept
               </button>
               <button
                 onClick={() => onReject(connection.connection_id)}
-                className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-600 text-[12px] font-medium rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                disabled={busy}
+                className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-600 text-[12px] font-medium rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
               >
                 <X size={14} weight="bold" />
                 Decline
@@ -409,11 +410,12 @@ function ConnectionCard({ connection, onAccept, onReject, onDelete }: {
   );
 }
 
-function ConnectionTableRow({ connection, onAccept, onReject, onDelete }: {
+function ConnectionTableRow({ connection, onAccept, onReject, onDelete, busy }: {
   connection: Connection;
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
   onDelete?: (id: string) => void;
+  busy?: boolean;
 }) {
   const partner = connection.partner;
   const router = useRouter();
@@ -447,13 +449,15 @@ function ConnectionTableRow({ connection, onAccept, onReject, onDelete }: {
           <div className="flex gap-2">
             <button
               onClick={() => onAccept(connection.connection_id)}
-              className="px-3 py-1 bg-[#4A7DC4] text-white text-[11px] font-medium rounded hover:bg-[#3A5A8C] transition-colors"
+              disabled={busy}
+              className="px-3 py-1 bg-[#4A7DC4] text-white text-[11px] font-medium rounded hover:bg-[#3A5A8C] transition-colors disabled:opacity-50"
             >
               Accept
             </button>
             <button
               onClick={() => onReject(connection.connection_id)}
-              className="px-3 py-1 border border-gray-300 text-gray-600 text-[11px] font-medium rounded hover:bg-gray-50 transition-colors"
+              disabled={busy}
+              className="px-3 py-1 border border-gray-300 text-gray-600 text-[11px] font-medium rounded hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Decline
             </button>
@@ -664,6 +668,9 @@ export default function ConnectionsPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Redirect if not authenticated
@@ -687,6 +694,7 @@ export default function ConnectionsPage() {
     try {
       const data = await apiClient.get<Connection[]>("/api/v1/connections");
       const list = Array.isArray(data) ? data : [];
+      setFetchError(null);
       // Merge in locally-known direction for backends that don't yet return initiated_by_me
       setConnections(list.map(c => {
         if (c.initiated_by_me === undefined && knownSentRef.current.has(c.connection_id)) {
@@ -694,8 +702,10 @@ export default function ConnectionsPage() {
         }
         return c;
       }));
-    } catch {
-      // Silently fail on fetch
+    } catch (err: any) {
+      if (err.status !== 401) {
+        setFetchError(err.message || "Failed to load connections");
+      }
     }
   }, []);
 
@@ -704,12 +714,25 @@ export default function ConnectionsPage() {
     fetchConnections().finally(() => setLoading(false));
   }, [user, fetchConnections]);
 
-  // Auto-dismiss error after 5s
+  // Poll for new connections every 15s
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(fetchConnections, 15000);
+    return () => clearInterval(interval);
+  }, [user, fetchConnections]);
+
+  // Auto-dismiss messages
   useEffect(() => {
     if (!actionError) return;
     const t = setTimeout(() => setActionError(null), 5000);
     return () => clearTimeout(t);
   }, [actionError]);
+
+  useEffect(() => {
+    if (!actionSuccess) return;
+    const t = setTimeout(() => setActionSuccess(null), 3000);
+    return () => clearTimeout(t);
+  }, [actionSuccess]);
 
   const handleInvite = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -733,15 +756,17 @@ export default function ConnectionsPage() {
   };
 
   const handleAccept = async (connectionId: string) => {
+    if (busyId) return;
+    setBusyId(connectionId);
     setActionError(null);
     try {
       await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "ACCEPTED" });
       setConnections(prev =>
         prev.map(c => c.connection_id === connectionId ? { ...c, status: "ACCEPTED" as const } : c)
       );
+      setActionSuccess("Connection accepted!");
     } catch (error: any) {
       if (error.status === 403) {
-        // 403 = user is the requester, not the target → mark locally and persist across re-fetches
         knownSentRef.current.add(connectionId);
         setConnections(prev =>
           prev.map(c => c.connection_id === connectionId ? { ...c, initiated_by_me: true } : c)
@@ -751,16 +776,21 @@ export default function ConnectionsPage() {
         setActionError(error.message || "Failed to accept connection");
         fetchConnections();
       }
+    } finally {
+      setBusyId(null);
     }
   };
 
   const handleReject = async (connectionId: string) => {
+    if (busyId) return;
+    setBusyId(connectionId);
     setActionError(null);
     try {
       await apiClient.put(`/api/v1/connections/${connectionId}/respond`, { action: "REJECTED" });
       setConnections(prev =>
         prev.map(c => c.connection_id === connectionId ? { ...c, status: "REJECTED" as const } : c)
       );
+      setActionSuccess("Connection declined.");
     } catch (error: any) {
       if (error.status === 403) {
         knownSentRef.current.add(connectionId);
@@ -772,17 +802,21 @@ export default function ConnectionsPage() {
         setActionError(error.message || "Failed to decline connection");
         fetchConnections();
       }
+    } finally {
+      setBusyId(null);
     }
   };
 
   const handleDelete = async (connectionId: string) => {
+    if (busyId) return;
+    setBusyId(connectionId);
     setActionError(null);
     try {
       await apiClient.delete(`/api/v1/connections/${connectionId}`);
       setConnections(prev => prev.filter(c => c.connection_id !== connectionId));
       setConfirmDelete(null);
+      setActionSuccess("Connection removed.");
     } catch (error: any) {
-      // 405 = endpoint doesn't exist yet on current backend
       if (error.status === 405 || error.message?.includes("Method Not Allowed")) {
         setActionError("Delete not available yet — backend update required.");
       } else {
@@ -790,6 +824,8 @@ export default function ConnectionsPage() {
       }
       setConfirmDelete(null);
       fetchConnections();
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -841,17 +877,33 @@ export default function ConnectionsPage() {
         ) : (
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 md:p-6 max-w-[1400px]">
+            {/* Fetch Error */}
+            {fetchError && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-2 text-[13px] text-amber-700">
+                <Warning size={16} weight="fill" className="flex-shrink-0" />
+                <span className="flex-1">{fetchError}</span>
+                <button onClick={fetchConnections} className="px-2 py-1 text-[12px] font-medium bg-amber-100 rounded hover:bg-amber-200 transition-colors">
+                  Retry
+                </button>
+              </div>
+            )}
+
             {/* Error Banner */}
             {actionError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2 text-[13px] text-red-700 animate-fade-in">
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2 text-[13px] text-red-700">
                 <Warning size={16} weight="fill" className="flex-shrink-0" />
                 <span className="flex-1">{actionError}</span>
-                <button
-                  onClick={() => setActionError(null)}
-                  className="p-1 text-red-400 hover:text-red-600"
-                >
+                <button onClick={() => setActionError(null)} className="p-1 text-red-400 hover:text-red-600">
                   <X size={14} />
                 </button>
+              </div>
+            )}
+
+            {/* Success Banner */}
+            {actionSuccess && (
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-md flex items-center gap-2 text-[13px] text-emerald-700">
+                <Check size={16} weight="bold" className="flex-shrink-0" />
+                <span className="flex-1">{actionSuccess}</span>
               </div>
             )}
 
@@ -988,6 +1040,7 @@ export default function ConnectionsPage() {
                             onAccept={handleAccept}
                             onReject={handleReject}
                             onDelete={requestDelete}
+                            busy={busyId === conn.connection_id}
                           />
                         ))
                       )}
@@ -1011,6 +1064,7 @@ export default function ConnectionsPage() {
                           onAccept={handleAccept}
                           onReject={handleReject}
                           onDelete={requestDelete}
+                          busy={busyId === conn.connection_id}
                         />
                       ))}
                     </div>
@@ -1034,6 +1088,7 @@ export default function ConnectionsPage() {
                         onAccept={handleAccept}
                         onReject={handleReject}
                         onDelete={requestDelete}
+                        busy={busyId === conn.connection_id}
                       />
                     ))}
                   </div>
