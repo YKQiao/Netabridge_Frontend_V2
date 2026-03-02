@@ -114,10 +114,9 @@ function LoginContent() {
     setError("");
 
     try {
-      const url = new URL(`${API_BASE_URL}${AUTH_ENDPOINTS.devLogin}`);
-      url.searchParams.set("email", trimmedEmail);
+      const url = `${API_BASE_URL}${AUTH_ENDPOINTS.devLogin}`;
 
-      const res = await fetch(url.toString(), {
+      const res = await fetch(url, {
         method: "POST",
         credentials: "include",
         headers: {
