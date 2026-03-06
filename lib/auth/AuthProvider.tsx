@@ -170,8 +170,8 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  logout: async () => {},
-  refreshUser: async () => {},
+  logout: async () => { },
+  refreshUser: async () => { },
 });
 
 // ---------------------------------------------------------------------------
@@ -183,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const mountedRef = useRef(true);
+  const isLoggingOutRef = useRef(false);
 
   // ------------------------------------------------------------------
   // fetchUser – calls GET /auth/me then optionally enriches from /users/me
@@ -264,7 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Re-check auth whenever the dev-mode token changes
     const onTokenChange = async (token: string | null) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || isLoggingOutRef.current) return;
       if (!token) {
         setUser(null);
         return;
@@ -286,19 +287,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Logout
   // ------------------------------------------------------------------
   const logout = useCallback(async () => {
+    isLoggingOutRef.current = true;
+
     // Clear dev-mode token (no-op in production)
     clearAuth();
-    setUser(null);
 
-    try {
-      // Call backend logout → clears session cookie & redirects to Entra
-      // We navigate the full page to let the browser follow the redirect chain
-      window.location.href = `${API_BASE_URL}${AUTH_ENDPOINTS.logout}`;
-    } catch {
-      // Fallback: just redirect to login
-      router.push("/login");
-    }
-  }, [router]);
+    // Do NOT call setUser(null) here.
+    // If we set the user to null immediately, protected pages like Dashboard
+    // will re-render and dispatch router.push('/login'), effectively cancelling
+    // the top-level window.location.href navigation below before it can complete.
+    // We want the browser to reach the backend to clear the HttpOnly session.
+
+    // Navigate the full page so the browser follows the backend's
+    // redirect chain (session cookie clear → Entra global logout).
+    window.location.href = `${API_BASE_URL}${AUTH_ENDPOINTS.logout}`;
+  }, []);
 
   return (
     <AuthContext.Provider
