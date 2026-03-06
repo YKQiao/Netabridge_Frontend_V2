@@ -105,9 +105,9 @@ function LoginContent() {
     if (email.trim()) setShowPassword(true);
   };
 
-  const handleDevLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmedEmail = email.trim();
+  const handleDevLogin = async (e: React.FormEvent | null, overrideEmail?: string) => {
+    e?.preventDefault();
+    const trimmedEmail = (overrideEmail || email).trim();
     if (!trimmedEmail) { setError("Please enter your email address."); return; }
 
     setSubmitting(true);
@@ -204,6 +204,24 @@ function LoginContent() {
         {/* ── Dev mode: email / password form ── */}
         {devMode && (
           <form onSubmit={handleDevLogin} noValidate className="space-y-3">
+            {/* Quick account selector */}
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { email: "alice@demo.com", label: "Alice", color: "bg-blue-100 text-blue-700 hover:bg-blue-200" },
+                { email: "bob@demo.com", label: "Bob", color: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" },
+                { email: "charlie@demo.com", label: "Charlie", color: "bg-purple-100 text-purple-700 hover:bg-purple-200" },
+              ].map((acc) => (
+                <button
+                  key={acc.email}
+                  type="button"
+                  onClick={() => { setEmail(acc.email); handleDevLogin(null, acc.email); }}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-colors ${acc.color} ${email === acc.email ? "ring-2 ring-offset-1 ring-current" : ""}`}
+                >
+                  {acc.label}
+                </button>
+              ))}
+            </div>
+
             <div>
               <label htmlFor="email" className="sr-only">Email address</label>
               <input

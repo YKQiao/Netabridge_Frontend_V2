@@ -8,6 +8,7 @@ import { BrandedLoading } from "@/components/ui/BrandedLoading";
 import {
   House,
   Robot,
+  Storefront,
   Package,
   ShoppingCart,
   UsersThree,
@@ -32,6 +33,7 @@ import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
 import { UserDropdown } from "@/components/ui/UserDropdown";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
+import { useNotifications } from "@/lib/notifications/NotificationContext";
 
 // =============================================================================
 // Types
@@ -53,7 +55,7 @@ interface SearchResult {
   company?: string;
   price?: string;
   matchScore?: number;
-  isDemo?: boolean;
+  ownerId?: string;
 }
 
 // API Response Types
@@ -92,16 +94,6 @@ interface ApiConnection {
   updated_at: string;
 }
 
-// Mock search results for demo/fallback
-const MOCK_RESULTS: SearchResult[] = [
-  { id: "demo-1", type: "user", name: "SpinTech Yarns", description: "Premium cotton yarn supplier with 15+ years of experience", tags: ["Cotton", "Yarn", "Wholesale"], location: "Mumbai, India", company: "SpinTech Industries", matchScore: 95, isDemo: true },
-  { id: "demo-2", type: "resource", name: "Organic Cotton Yarn - 30s Count", description: "High-quality organic cotton yarn, ideal for sustainable fashion", tags: ["Organic", "Cotton", "Sustainable"], price: "$2.50/kg", matchScore: 88, isDemo: true },
-  { id: "demo-3", type: "user", name: "Golden Loom Textiles", description: "Full-service fabric manufacturing and export company", tags: ["Fabric", "Manufacturing", "Export"], location: "Ahmedabad, India", company: "Golden Loom Pvt Ltd", matchScore: 82, isDemo: true },
-  { id: "demo-4", type: "buy_post", name: "Looking for Cotton Yarn Suppliers", description: "Need 500kg monthly supply of 40s count cotton yarn", tags: ["Cotton", "Yarn", "Bulk Order"], price: "Budget: $1,200", matchScore: 78, isDemo: true },
-  { id: "demo-5", type: "resource", name: "Recycled Polyester Yarn", description: "Eco-friendly recycled polyester yarn for sportswear", tags: ["Recycled", "Polyester", "Sportswear"], price: "$3.20/kg", matchScore: 75, isDemo: true },
-  { id: "demo-6", type: "user", name: "EcoWear Fashions", description: "Sustainable fashion brand seeking ethical suppliers", tags: ["Fashion", "Sustainable", "Retail"], location: "Los Angeles, USA", company: "EcoWear Inc", matchScore: 70, isDemo: true },
-];
-
 // Helper functions to transform API data to SearchResult format
 function resourceToSearchResult(resource: ApiResource): SearchResult {
   return {
@@ -111,6 +103,7 @@ function resourceToSearchResult(resource: ApiResource): SearchResult {
     description: resource.description || "No description provided",
     price: resource.price ? `${resource.currency || "$"}${resource.price}` : undefined,
     tags: resource.is_active ? ["Active"] : ["Inactive"],
+    ownerId: resource.owner_id,
   };
 }
 
@@ -122,12 +115,13 @@ function buyPostToSearchResult(post: ApiBuyPost): SearchResult {
     description: post.description || "No description provided",
     price: post.budget_range ? `Budget: ${post.budget_range}` : undefined,
     tags: [post.status],
+    ownerId: post.owner_id,
   };
 }
 
 function connectionToSearchResult(conn: ApiConnection): SearchResult {
   return {
-    id: conn.connection_id,
+    id: conn.partner.id,
     type: "user",
     name: conn.partner.display_name || conn.partner.email,
     description: `Connected user: ${conn.partner.email}`,
@@ -156,7 +150,7 @@ function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
         {/* Hamburger Menu Button (Mobile Only) */}
         <button
           onClick={onMenuClick}
-          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors hidden"
           aria-label="Open menu"
         >
           <List size={20} weight="bold" />
@@ -198,18 +192,18 @@ function Sidebar({
   mobileOpen = false,
   onMobileClose,
 }: SidebarProps) {
-  const navSections: { title: string; items: NavItem[] }[] = [
+  const { pendingConnections, unreadMessages } = useNotifications();
+  const navSections: { title: string; items: (NavItem & { badge?: number })[] }[] = [
     { title: "Overview", items: [
       { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
       { icon: <Robot size={18} />, label: "AI Assistant", href: "/chat" },
     ]},
     { title: "Trade", items: [
-      { icon: <Package size={18} />, label: "My Resources", href: "/resources" },
-      { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests" },
+      { icon: <Storefront size={18} />, label: "Resources", href: "/marketplace" },
     ]},
     { title: "Network", items: [
-      { icon: <UsersThree size={18} />, label: "Connections", href: "/connections" },
-      { icon: <ChatText size={18} />, label: "Messages", href: "/messages" },
+      { icon: <UsersThree size={18} />, label: "Network", href: "/connections", badge: pendingConnections || undefined },
+      { icon: <ChatText size={18} />, label: "Messages", href: "/messages", badge: unreadMessages || undefined },
       { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover", active: currentPath === "/discover" },
     ]},
   ];
@@ -246,6 +240,14 @@ function Sidebar({
                     {item.icon}
                   </span>
                   {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && item.badge ? (
+                    <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-500 text-white rounded-full">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                  {collapsed && item.badge ? (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  ) : null}
                 </Link>
               ))}
             </div>
@@ -395,11 +397,6 @@ function SearchResultCard({ result, onConnect, onView }: { result: SearchResult;
               {tag}
             </span>
           ))}
-          {result.isDemo && (
-            <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-[11px] rounded">
-              Demo
-            </span>
-          )}
         </div>
       )}
 
@@ -442,76 +439,30 @@ function FilterSidebar({ filters, onFilterChange }: { filters: any; onFilterChan
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[14px] font-semibold text-gray-900">Filters</h3>
-          <button className="text-[12px] text-[#4A7DC4] hover:underline">Clear all</button>
+          <button className="text-[12px] text-[#4A7DC4] hover:underline" onClick={() => onFilterChange("types", [])}>Clear all</button>
         </div>
 
-        {/* Type Filter */}
-        <div className="mb-4">
+        <div>
           <label className="text-[12px] font-medium text-gray-700 mb-2 block">Type</label>
           <div className="space-y-2">
-            {["All", "Suppliers", "Resources", "Buy Requests"].map((type) => (
-              <label key={type} className="flex items-center gap-2 cursor-pointer">
+            {[
+              { key: "all", label: "All" },
+              { key: "user", label: "Network" },
+              { key: "resource", label: "Resources" },
+              { key: "buy_post", label: "Buy Requests" },
+            ].map((type) => (
+              <label key={type.key} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={filters.types?.includes(type.toLowerCase()) || type === "All"}
-                  onChange={() => onFilterChange("type", type.toLowerCase())}
+                  checked={type.key === "all" ? filters.types.length === 0 : filters.types.includes(type.key)}
+                  onChange={() => onFilterChange("type", type.key)}
                   className="w-4 h-4 rounded border-gray-300 text-[#4A7DC4] focus:ring-[#4A7DC4]"
                 />
-                <span className="text-[13px] text-gray-700">{type}</span>
+                <span className="text-[13px] text-gray-700">{type.label}</span>
               </label>
             ))}
           </div>
         </div>
-
-        {/* Industry Filter */}
-        <div className="mb-4">
-          <label className="text-[12px] font-medium text-gray-700 mb-2 block">Industry</label>
-          <select className="w-full px-3 py-2 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]">
-            <option>All Industries</option>
-            <option>Textiles</option>
-            <option>Fashion</option>
-            <option>Raw Materials</option>
-            <option>Manufacturing</option>
-          </select>
-        </div>
-
-        {/* Location Filter */}
-        <div className="mb-4">
-          <label className="text-[12px] font-medium text-gray-700 mb-2 block">Location</label>
-          <select className="w-full px-3 py-2 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]">
-            <option>Anywhere</option>
-            <option>North America</option>
-            <option>Europe</option>
-            <option>Asia</option>
-            <option>South America</option>
-          </select>
-        </div>
-
-        {/* Price Range */}
-        <div className="mb-4">
-          <label className="text-[12px] font-medium text-gray-700 mb-2 block">Price Range</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Min"
-              className="flex-1 px-3 py-2 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]"
-            />
-            <input
-              type="text"
-              placeholder="Max"
-              className="flex-1 px-3 py-2 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]"
-            />
-          </div>
-        </div>
-
-        {/* Verified Only */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            className="w-4 h-4 rounded border-gray-300 text-[#4A7DC4] focus:ring-[#4A7DC4]"
-          />
-          <span className="text-[13px] text-gray-700">Verified only</span>
-        </label>
       </div>
     </div>
   );
@@ -532,7 +483,6 @@ export default function DiscoverPage() {
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [usingDemoData, setUsingDemoData] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Redirect if not authenticated
@@ -548,50 +498,33 @@ export default function DiscoverPage() {
     setError(null);
 
     try {
-      // Fetch resources, buy-posts, and connections in parallel
       const [resourcesRes, buyPostsRes, connectionsRes] = await Promise.allSettled([
         apiClient.get<ApiResource[]>("/api/v1/resources"),
         apiClient.get<ApiBuyPost[]>("/api/v1/buy-posts"),
-        apiClient.get<ApiConnection[]>("/api/v1/connections"),
+        apiClient.get<ApiConnection[]>("/api/v1/connections?status_filter=ACCEPTED"),
       ]);
 
       const searchResults: SearchResult[] = [];
 
-      // Process resources
       if (resourcesRes.status === "fulfilled" && Array.isArray(resourcesRes.value)) {
         searchResults.push(...resourcesRes.value.map(resourceToSearchResult));
       }
 
-      // Process buy posts
       if (buyPostsRes.status === "fulfilled" && Array.isArray(buyPostsRes.value)) {
         searchResults.push(...buyPostsRes.value.map(buyPostToSearchResult));
       }
 
-      // Process connections (users)
       if (connectionsRes.status === "fulfilled" && Array.isArray(connectionsRes.value)) {
-        // Only show accepted connections as discoverable users
-        const acceptedConnections = connectionsRes.value.filter(c => c.status === "ACCEPTED");
-        searchResults.push(...acceptedConnections.map(connectionToSearchResult));
+        searchResults.push(...connectionsRes.value.map(connectionToSearchResult));
       }
 
-      // If we got any real data, use it
-      if (searchResults.length > 0) {
-        setAllResults(searchResults);
-        setResults(searchResults);
-        setUsingDemoData(false);
-      } else {
-        // Fall back to demo data if no results
-        setAllResults(MOCK_RESULTS);
-        setResults(MOCK_RESULTS);
-        setUsingDemoData(true);
-      }
+      setAllResults(searchResults);
+      setResults(searchResults);
     } catch (err) {
       console.error("Failed to fetch discover data:", err);
-      // On error, fall back to demo data
-      setAllResults(MOCK_RESULTS);
-      setResults(MOCK_RESULTS);
-      setUsingDemoData(true);
-      setError("Could not load live data. Showing demo results.");
+      setAllResults([]);
+      setResults([]);
+      setError("Could not load data. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -650,11 +583,6 @@ export default function DiscoverPage() {
             <div className="mb-6">
               <div className="flex items-center gap-3">
                 <h1 className="text-[24px] font-semibold text-gray-900">Discover</h1>
-                {usingDemoData && (
-                  <span className="px-2 py-1 bg-orange-100 text-orange-700 text-[11px] font-medium rounded">
-                    Demo Data
-                  </span>
-                )}
               </div>
               <p className="text-[14px] text-gray-500 mt-1">
                 Find suppliers, resources, and opportunities across the network
@@ -698,24 +626,6 @@ export default function DiscoverPage() {
               </div>
             </form>
 
-            {/* AI Suggestion */}
-            <div className="bg-gradient-to-r from-[#4A7DC4]/10 to-[#354A5F]/10 border border-[#4A7DC4]/20 rounded-lg px-3 sm:px-4 py-3 mb-6 flex items-start sm:items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#4A7DC4] flex items-center justify-center flex-shrink-0">
-                <Sparkle size={18} weight="fill" className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] sm:text-[13px] text-gray-700">
-                  <strong className="font-semibold">AI Suggestion:</strong>{" "}
-                  <span className="hidden sm:inline">Based on your recent activity, you might be interested in cotton yarn suppliers from India.</span>
-                  <span className="sm:hidden">Cotton yarn suppliers from India may interest you.</span>{" "}
-                  <button className="text-[#4A7DC4] font-medium hover:underline">Show me</button>
-                </p>
-              </div>
-              <button className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0">
-                <X size={16} />
-              </button>
-            </div>
-
             {/* Main Content */}
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Filters - hidden on mobile, shown on larger screens */}
@@ -736,7 +646,7 @@ export default function DiscoverPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                   <span className="text-[13px] text-gray-500">
-                    Showing <strong>{results.length}</strong> {usingDemoData ? "demo " : ""}results
+                    Showing <strong>{results.length}</strong> results
                   </span>
                   <select className="px-3 py-1.5 border border-gray-200 rounded text-[13px] focus:outline-none focus:border-[#4A7DC4]">
                     <option>Sort by: Relevance</option>
@@ -749,8 +659,21 @@ export default function DiscoverPage() {
                 {results.length === 0 ? (
                   <div className="bg-white border border-gray-200 rounded-lg py-16 text-center">
                     <MagnifyingGlass size={48} className="mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-[16px] font-semibold text-gray-900 mb-1">No results found</h3>
-                    <p className="text-[14px] text-gray-500">Try adjusting your search or filters</p>
+                    <h3 className="text-[16px] font-semibold text-gray-900 mb-1">
+                      {searchQuery ? "No results found" : "Nothing here yet"}
+                    </h3>
+                    <p className="text-[14px] text-gray-500 mb-4">
+                      {searchQuery
+                        ? "Try adjusting your search"
+                        : "Add resources, create buy requests, or connect with others to see them here"}
+                    </p>
+                    {!searchQuery && (
+                      <div className="flex gap-3 justify-center">
+                        <Link href="/connections" className="px-4 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors">
+                          Find Connections
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
@@ -758,8 +681,16 @@ export default function DiscoverPage() {
                       <SearchResultCard
                         key={result.id}
                         result={result}
-                        onConnect={() => console.log("Connect:", result.id)}
-                        onView={() => console.log("View:", result.id)}
+                        onConnect={() => {
+                          const targetUserId = result.type === "user" ? result.id : result.ownerId;
+                          if (targetUserId) router.push(`/messages?user=${targetUserId}`);
+                          else router.push("/messages");
+                        }}
+                        onView={() => {
+                          if (result.type === "resource") router.push("/marketplace?tab=resources");
+                          else if (result.type === "buy_post") router.push("/marketplace?tab=buy-requests");
+                          else router.push("/connections");
+                        }}
                       />
                     ))}
                   </div>

@@ -7,8 +7,7 @@ import { apiClient } from "@/lib/api/client";
 import {
   House,
   Robot,
-  Package,
-  ShoppingCart,
+  Storefront,
   UsersThree,
   MagnifyingGlass,
   ChatText,
@@ -28,6 +27,7 @@ import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
 import { UserDropdown } from "@/components/ui/UserDropdown";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
+import { useNotifications } from "@/lib/notifications/NotificationContext";
 
 // =============================================================================
 // Types
@@ -126,7 +126,7 @@ function ShellHeader({ user, onLogout, onMenuClick }: {
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
-          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors hidden"
           aria-label="Open menu"
         >
           <List size={20} weight="bold" />
@@ -166,7 +166,8 @@ function Sidebar({
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }) {
-  const navSections: { title: string; items: NavItem[] }[] = [
+  const { pendingConnections, unreadMessages } = useNotifications();
+  const navSections: { title: string; items: (NavItem & { badge?: number })[] }[] = [
     {
       title: "Overview",
       items: [
@@ -177,15 +178,14 @@ function Sidebar({
     {
       title: "Trade",
       items: [
-        { icon: <Package size={18} />, label: "My Resources", href: "/resources" },
-        { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests" },
+        { icon: <Storefront size={18} />, label: "Resources", href: "/marketplace" },
       ],
     },
     {
       title: "Network",
       items: [
-        { icon: <UsersThree size={18} />, label: "Connections", href: "/connections" },
-        { icon: <ChatText size={18} />, label: "Messages", href: "/messages", active: currentPath === "/messages" },
+        { icon: <UsersThree size={18} />, label: "Network", href: "/connections", badge: pendingConnections || undefined },
+        { icon: <ChatText size={18} />, label: "Messages", href: "/messages", active: currentPath === "/messages", badge: unreadMessages || undefined },
         { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
       ],
     },
@@ -217,6 +217,14 @@ function Sidebar({
                 >
                   <span className={`flex-shrink-0 ${item.active ? "text-[#4A7DC4]" : "text-gray-400"}`}>{item.icon}</span>
                   {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && item.badge ? (
+                    <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-500 text-white rounded-full">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                  {collapsed && item.badge ? (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  ) : null}
                 </Link>
               ))}
             </div>

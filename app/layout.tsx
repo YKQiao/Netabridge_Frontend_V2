@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
+import { NotificationProvider } from "@/lib/notifications/NotificationContext";
 import { PreviewBanner } from "@/components/ui/PreviewBanner";
+import { MobileBottomNav } from "@/components/ui/MobileBottomNav";
 
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -84,7 +86,12 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={ibmPlexSans.className} suppressHydrationWarning>
         <PreviewBanner />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            {children}
+            <MobileBottomNav />
+          </NotificationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

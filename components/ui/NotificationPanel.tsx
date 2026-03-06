@@ -6,48 +6,40 @@ import {
   Bell,
   UserCirclePlus,
   ChatText,
-  GearSix,
   Circle,
+  X,
+  ArrowLeft,
+  BellSimple,
 } from "@phosphor-icons/react";
-
-interface Notification {
-  id: string;
-  type: "connection" | "message" | "system";
-  title: string;
-  description: string;
-  time: string;
-  read: boolean;
-  actionUrl?: string;
-}
-
-const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: "1", type: "connection", title: "New connection request", description: "Sarah Chen from Golden Loom wants to connect", time: "2 min ago", read: false, actionUrl: "/connections" },
-  { id: "2", type: "message", title: "New message", description: "Raj Patel: \"Can we discuss the cotton yarn pricing?\"", time: "15 min ago", read: false, actionUrl: "/chat" },
-  { id: "3", type: "connection", title: "Connection accepted", description: "Mike Torres is now in your network", time: "3 hours ago", read: true, actionUrl: "/connections" },
-  { id: "4", type: "system", title: "Profile incomplete", description: "Add your company details to get better matches", time: "1 day ago", read: true, actionUrl: "/settings" },
-];
+import { useNotifications } from "@/lib/notifications/NotificationContext";
 
 export function NotificationPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const { unreadMessages, pendingConnections, total } = useNotifications();
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const items: { id: string; icon: React.ReactNode; title: string; description: string; href: string; count: number }[] = [];
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
+  if (pendingConnections > 0) {
+    items.push({
+      id: "pending-connections",
+      icon: <UserCirclePlus size={20} weight="fill" className="text-[#4A7DC4]" />,
+      title: `${pendingConnections} pending connection${pendingConnections !== 1 ? "s" : ""}`,
+      description: "Review and accept connection requests",
+      href: "/connections",
+      count: pendingConnections,
+    });
+  }
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const getIcon = (type: Notification["type"]) => {
-    switch (type) {
-      case "connection": return <UserCirclePlus size={18} weight="fill" className="text-[#4A7DC4]" />;
-      case "message": return <ChatText size={18} weight="fill" className="text-emerald-500" />;
-      case "system": return <GearSix size={18} weight="fill" className="text-gray-400" />;
-    }
-  };
+  if (unreadMessages > 0) {
+    items.push({
+      id: "unread-messages",
+      icon: <ChatText size={20} weight="fill" className="text-emerald-500" />,
+      title: `${unreadMessages} unread message${unreadMessages !== 1 ? "s" : ""}`,
+      description: "Open messages to read and reply",
+      href: "/messages",
+      count: unreadMessages,
+    });
+  }
 
   return (
     <div className="relative">
@@ -56,84 +48,127 @@ export function NotificationPanel() {
         className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors relative"
       >
         <Bell size={18} weight="regular" />
-        {unreadCount > 0 && (
+        {total > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-            {unreadCount}
+            {total > 9 ? "9+" : total}
           </span>
         )}
       </button>
 
       {isOpen && (
         <>
+          {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          {/* Dropdown - positioned right:0 on desktop, centered on mobile */}
-          <div className="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-14 sm:top-full sm:mt-2 w-auto sm:w-80 bg-white rounded-md shadow-lg border border-gray-200 z-50 animate-scale-fade overflow-hidden max-h-[calc(100vh-4rem)] sm:max-h-[28rem]">
-            {/* Header */}
+
+          {/* Desktop dropdown */}
+          <div className="hidden sm:block absolute right-0 top-full mt-2 w-80 bg-white rounded-md shadow-lg border border-gray-200 z-50 animate-scale-fade overflow-hidden max-h-[28rem]">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-gray-900">Notifications</span>
-                {unreadCount > 0 && (
+                {total > 0 && (
                   <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] font-semibold rounded-full">
-                    {unreadCount} new
+                    {total} new
                   </span>
                 )}
               </div>
-              {unreadCount > 0 && (
-                <button
-                  onClick={markAllAsRead}
-                  className="text-[12px] text-[#4A7DC4] hover:underline font-medium"
-                >
-                  Mark all read
-                </button>
-              )}
             </div>
-
-            {/* Notifications List */}
-            <div className="max-h-[calc(100vh-10rem)] sm:max-h-80 overflow-y-auto">
-              {notifications.length === 0 ? (
+            <div className="max-h-80 overflow-y-auto">
+              {items.length === 0 ? (
                 <div className="px-4 py-8 text-center text-gray-400 text-sm">
-                  No notifications
+                  No new notifications
                 </div>
               ) : (
-                notifications.map((notif) => (
+                items.map((item) => (
                   <Link
-                    key={notif.id}
-                    href={notif.actionUrl || "#"}
-                    onClick={() => {
-                      markAsRead(notif.id);
-                      setIsOpen(false);
-                    }}
-                    className={`
-                      flex gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50
-                      ${!notif.read ? "bg-blue-50/50" : ""}
-                    `}
+                    key={item.id}
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    className="flex gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 bg-blue-50/50"
                   >
-                    <div className="flex-shrink-0 mt-0.5">
-                      {getIcon(notif.type)}
-                    </div>
+                    <div className="flex-shrink-0 mt-0.5">{item.icon}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <span className={`text-[13px] ${!notif.read ? "font-semibold text-gray-900" : "text-gray-700"}`}>
-                          {notif.title}
-                        </span>
-                        {!notif.read && (
-                          <Circle size={8} weight="fill" className="text-[#4A7DC4] flex-shrink-0 mt-1" />
-                        )}
+                        <span className="text-[13px] font-semibold text-gray-900">{item.title}</span>
+                        <Circle size={8} weight="fill" className="text-[#4A7DC4] flex-shrink-0 mt-1" />
                       </div>
-                      <p className="text-[12px] text-gray-500 truncate">{notif.description}</p>
-                      <span className="text-[11px] text-gray-400">{notif.time}</span>
                     </div>
                   </Link>
                 ))
               )}
             </div>
-
-            {/* Footer */}
             <div className="px-4 py-2 border-t border-gray-100 bg-gray-50">
+              <Link href="/settings" onClick={() => setIsOpen(false)} className="text-[12px] text-[#4A7DC4] hover:underline font-medium">
+                Notification settings
+              </Link>
+            </div>
+          </div>
+
+          {/* Mobile full-screen sheet */}
+          <div className="sm:hidden fixed inset-0 z-50 bg-white flex flex-col animate-slide-up">
+            {/* Mobile header */}
+            <div className="flex items-center justify-between px-4 h-14 border-b border-gray-200 flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded transition-colors"
+                >
+                  <ArrowLeft size={20} weight="bold" />
+                </button>
+                <h1 className="text-[16px] font-semibold text-white">Notifications</h1>
+              </div>
+              {total > 0 && (
+                <span className="px-2 py-0.5 bg-white/20 text-white text-[11px] font-semibold rounded-full">
+                  {total} new
+                </span>
+              )}
+            </div>
+
+            {/* Mobile content */}
+            <div className="flex-1 overflow-y-auto bg-[#F7F8FA]">
+              {items.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                    <BellSimple size={32} className="text-gray-300" />
+                  </div>
+                  <h2 className="text-[16px] font-semibold text-gray-700 mb-1">All caught up</h2>
+                  <p className="text-[13px] text-gray-500">No new notifications right now</p>
+                </div>
+              ) : (
+                <div className="py-2">
+                  {items.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      onClick={() => setIsOpen(false)}
+                      className="flex gap-4 px-4 py-4 mx-3 my-1.5 bg-white rounded-xl shadow-sm border border-gray-100 active:bg-gray-50 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                        {item.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[14px] font-semibold text-gray-900 block">
+                          {item.title}
+                        </span>
+                        <span className="text-[12px] text-gray-500 mt-0.5 block">
+                          {item.description}
+                        </span>
+                      </div>
+                      <div className="flex items-center flex-shrink-0">
+                        <Circle size={8} weight="fill" className="text-[#4A7DC4]" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile footer */}
+            <div className="px-4 py-3 border-t border-gray-200 bg-white safe-area-bottom">
               <Link
-                href="/settings/notifications"
+                href="/settings"
                 onClick={() => setIsOpen(false)}
-                className="text-[12px] text-[#4A7DC4] hover:underline font-medium"
+                className="block text-center text-[13px] text-[#4A7DC4] font-medium py-2"
               >
                 Notification settings
               </Link>

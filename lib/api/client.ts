@@ -28,13 +28,22 @@ export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 
 // ---------------------------------------------------------------------------
 // Internal token store (dev-mode Bearer token)
+// Persisted in localStorage so it survives page reloads during local dev.
 // ---------------------------------------------------------------------------
 
-let _bearerToken: string | null = null;
+const DEV_TOKEN_KEY = "neta_dev_token";
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+let _bearerToken: string | null =
+  IS_DEV && typeof window !== "undefined" ? localStorage.getItem(DEV_TOKEN_KEY) : null;
 
 /** Save a dev-mode JWT so all subsequent requests include it. */
 export function setBearerToken(token: string | null): void {
   _bearerToken = token;
+  if (IS_DEV && typeof window !== "undefined") {
+    if (token) localStorage.setItem(DEV_TOKEN_KEY, token);
+    else localStorage.removeItem(DEV_TOKEN_KEY);
+  }
 }
 
 /** Read the currently stored dev-mode JWT (may be null in production). */

@@ -8,8 +8,7 @@ import { ConnectionsSkeleton } from "@/components/ui/SkeletonLoader";
 import {
   House,
   Robot,
-  Package,
-  ShoppingCart,
+  Storefront,
   UsersThree,
   MagnifyingGlass,
   ChatText,
@@ -18,8 +17,6 @@ import {
   X,
   EnvelopeSimple,
   Plus,
-  Eye,
-  EyeSlash,
   SquaresFour,
   List,
   Warning,
@@ -34,6 +31,7 @@ import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
 import { UserDropdown } from "@/components/ui/UserDropdown";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
+import { useNotifications } from "@/lib/notifications/NotificationContext";
 
 // =============================================================================
 // Types
@@ -80,9 +78,10 @@ function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
       <div className="flex items-center gap-3">
+        {/* Hamburger only on tablet+ where there's no bottom nav */}
         <button
           onClick={onMenuClick}
-          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors hidden"
           aria-label="Open menu"
         >
           <List size={20} weight="bold" />
@@ -103,6 +102,7 @@ interface NavItem {
   label: string;
   href: string;
   active?: boolean;
+  badge?: number;
 }
 
 interface SidebarProps {
@@ -120,6 +120,7 @@ function Sidebar({
   mobileOpen = false,
   onMobileClose,
 }: SidebarProps) {
+  const { pendingConnections: pendingBadge, unreadMessages } = useNotifications();
   const navSections: { title: string; items: NavItem[] }[] = [
     {
       title: "Overview",
@@ -131,15 +132,14 @@ function Sidebar({
     {
       title: "Trade",
       items: [
-        { icon: <Package size={18} />, label: "My Resources", href: "/resources" },
-        { icon: <ShoppingCart size={18} />, label: "Buy Requests", href: "/buy-requests" },
+        { icon: <Storefront size={18} />, label: "Resources", href: "/marketplace" },
       ],
     },
     {
       title: "Network",
       items: [
-        { icon: <UsersThree size={18} />, label: "Connections", href: "/connections", active: currentPath === "/connections" },
-        { icon: <ChatText size={18} />, label: "Messages", href: "/messages" },
+        { icon: <UsersThree size={18} />, label: "Network", href: "/connections", active: currentPath === "/connections", badge: pendingBadge || undefined },
+        { icon: <ChatText size={18} />, label: "Messages", href: "/messages", badge: unreadMessages || undefined },
         { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
       ],
     },
@@ -297,17 +297,18 @@ function StatusBadge({ status, initiatedByMe }: { status: Connection["status"]; 
   );
 }
 
-function ConnectionCard({ connection, onAccept, onReject, onDelete, busy }: {
+function ConnectionCard({ connection, onAccept, onReject, onDelete, onViewProfile, busy }: {
   connection: Connection;
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onViewProfile?: (conn: Connection) => void;
   busy?: boolean;
 }) {
   const partner = connection.partner;
   const router = useRouter();
   const isPendingSent = connection.status === "PENDING" && connection.initiated_by_me === true;
-  const isPendingReceived = connection.status === "PENDING" && !isPendingSent;
+  const isPendingReceived = connection.status === "PENDING" && connection.initiated_by_me === false;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -318,7 +319,10 @@ function ConnectionCard({ connection, onAccept, onReject, onDelete, busy }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="text-[14px] font-semibold text-gray-900 truncate">
+              <h3
+                className="text-[14px] font-semibold text-gray-900 truncate cursor-pointer hover:text-[#4A7DC4] transition-colors"
+                onClick={() => onViewProfile?.(connection)}
+              >
                 {partner?.display_name || "Unknown User"}
               </h3>
               <p className="text-[12px] text-gray-500 truncate">{partner?.email}</p>
@@ -410,17 +414,18 @@ function ConnectionCard({ connection, onAccept, onReject, onDelete, busy }: {
   );
 }
 
-function ConnectionTableRow({ connection, onAccept, onReject, onDelete, busy }: {
+function ConnectionTableRow({ connection, onAccept, onReject, onDelete, onViewProfile, busy }: {
   connection: Connection;
   onAccept?: (id: string) => void;
   onReject?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onViewProfile?: (conn: Connection) => void;
   busy?: boolean;
 }) {
   const partner = connection.partner;
   const router = useRouter();
   const isPendingSent = connection.status === "PENDING" && connection.initiated_by_me === true;
-  const isPendingReceived = connection.status === "PENDING" && !isPendingSent;
+  const isPendingReceived = connection.status === "PENDING" && connection.initiated_by_me === false;
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
@@ -430,7 +435,10 @@ function ConnectionTableRow({ connection, onAccept, onReject, onDelete, busy }: 
             {(partner?.display_name?.[0] || partner?.email?.[0] || "?").toUpperCase()}
           </div>
           <div>
-            <div className="text-[13px] font-semibold text-gray-900">{partner?.display_name || "Unknown"}</div>
+            <div
+              className="text-[13px] font-semibold text-gray-900 cursor-pointer hover:text-[#4A7DC4] transition-colors"
+              onClick={() => onViewProfile?.(connection)}
+            >{partner?.display_name || "Unknown"}</div>
             <div className="text-[12px] text-gray-500">{partner?.email}</div>
           </div>
         </div>
@@ -652,19 +660,298 @@ function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: {
 }
 
 // =============================================================================
+// Contact Book (localStorage)
+// =============================================================================
+
+interface LocalContact {
+  email: string;
+  addedAt: string;
+}
+
+const CONTACT_BOOK_KEY = "neta_contact_book";
+
+const CONTACT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function getContactBook(): LocalContact[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const all: LocalContact[] = JSON.parse(localStorage.getItem(CONTACT_BOOK_KEY) || "[]");
+    const now = Date.now();
+    const fresh = all.filter((c) => now - new Date(c.addedAt).getTime() < CONTACT_MAX_AGE_MS);
+    // Prune stale entries on read
+    if (fresh.length !== all.length) saveContactBook(fresh);
+    return fresh;
+  } catch {
+    return [];
+  }
+}
+
+function saveContactBook(contacts: LocalContact[]) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(CONTACT_BOOK_KEY, JSON.stringify(contacts));
+  }
+}
+
+function addToContactBook(email: string) {
+  const contacts = getContactBook();
+  if (!contacts.some((c) => c.email.toLowerCase() === email.toLowerCase())) {
+    contacts.push({ email, addedAt: new Date().toISOString() });
+    saveContactBook(contacts);
+  }
+}
+
+function removeFromContactBook(email: string) {
+  const contacts = getContactBook().filter(
+    (c) => c.email.toLowerCase() !== email.toLowerCase()
+  );
+  saveContactBook(contacts);
+}
+
+// =============================================================================
+// Bulk Invite Modal
+// =============================================================================
+
+function BulkInviteModal({
+  isOpen,
+  onClose,
+  onInvite,
+  userEmail,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onInvite: (email: string) => Promise<{ success: boolean; error?: string }>;
+  userEmail: string;
+}) {
+  const [rawText, setRawText] = useState("");
+  const [chips, setChips] = useState<string[]>([]);
+  const [results, setResults] = useState<{ email: string; status: "pending" | "sent" | "exists" | "not_registered" | "error"; message?: string }[]>([]);
+  const [sending, setSending] = useState(false);
+  const [step, setStep] = useState<"input" | "review" | "sending">("input");
+
+  const parseEmails = () => {
+    const emails = rawText
+      .split(/[,\n;]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => e && e.includes("@") && e !== userEmail.toLowerCase());
+    const unique = Array.from(new Set(emails));
+    setChips(unique);
+    if (unique.length > 0) setStep("review");
+  };
+
+  const removeChip = (email: string) => {
+    setChips((prev) => prev.filter((e) => e !== email));
+    if (chips.length <= 1) setStep("input");
+  };
+
+  const sendAll = async () => {
+    setSending(true);
+    setStep("sending");
+    const res: typeof results = chips.map((email) => ({ email, status: "pending" as const }));
+    setResults([...res]);
+
+    for (let i = 0; i < chips.length; i++) {
+      const email = chips[i];
+      try {
+        const result = await onInvite(email);
+        if (result.success) {
+          res[i] = { email, status: "sent" };
+          removeFromContactBook(email);
+        } else if (result.error?.includes("already exists")) {
+          res[i] = { email, status: "exists", message: result.error };
+        } else if (result.error?.includes("404") || result.error?.includes("not found") || result.error?.includes("Request failed (404)")) {
+          res[i] = { email, status: "not_registered" };
+          addToContactBook(email);
+        } else {
+          res[i] = { email, status: "error", message: result.error };
+        }
+      } catch {
+        res[i] = { email, status: "error", message: "Unexpected error" };
+      }
+      setResults([...res]);
+    }
+
+    setSending(false);
+  };
+
+  const handleClose = () => {
+    setRawText("");
+    setChips([]);
+    setResults([]);
+    setStep("input");
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[18px] font-semibold text-gray-900">Bulk Invite</h2>
+          <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        {step === "input" && (
+          <>
+            <p className="text-[13px] text-gray-500 mb-3">
+              Paste multiple email addresses separated by commas, semicolons, or new lines.
+            </p>
+            <textarea
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder={"alice@company.com\nbob@company.com\ncarol@other.com"}
+              rows={5}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4] mb-4"
+            />
+            <div className="flex gap-3">
+              <button onClick={handleClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={parseEmails} disabled={!rawText.trim()} className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors disabled:opacity-50">
+                Parse Emails
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === "review" && (
+          <>
+            <p className="text-[13px] text-gray-500 mb-3">
+              {chips.length} email{chips.length !== 1 ? "s" : ""} found. Remove any you don&apos;t want to invite.
+            </p>
+            <div className="flex flex-wrap gap-2 mb-4 max-h-40 overflow-y-auto">
+              {chips.map((email) => (
+                <span key={email} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#EEF4FB] text-[#4A7DC4] text-[12px] font-medium rounded-full">
+                  {email}
+                  <button onClick={() => removeChip(email)} className="text-[#4A7DC4]/60 hover:text-[#4A7DC4]">
+                    <X size={12} weight="bold" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setStep("input")} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50 transition-colors">
+                Back
+              </button>
+              <button onClick={sendAll} className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors">
+                Send All ({chips.length})
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === "sending" && (
+          <>
+            <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+              {(results.length > 0 ? results : chips.map((e) => ({ email: e, status: "pending" as const }))).map((r) => (
+                <div key={r.email} className="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-50 text-[13px]">
+                  <span className="flex-1 truncate text-gray-700">{r.email}</span>
+                  {r.status === "pending" && <span className="text-gray-400 text-[12px]">Sending...</span>}
+                  {r.status === "sent" && <span className="text-emerald-600 text-[12px] font-medium flex items-center gap-1"><Check size={14} weight="bold" />Sent</span>}
+                  {r.status === "exists" && <span className="text-amber-600 text-[12px] font-medium">Already exists</span>}
+                  {r.status === "not_registered" && <span className="text-gray-500 text-[12px] font-medium">Not on NetaBridge</span>}
+                  {r.status === "error" && <span className="text-red-600 text-[12px] font-medium">Error</span>}
+                </div>
+              ))}
+            </div>
+            {!sending && (
+              <button onClick={handleClose} className="w-full px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors">
+                Done
+              </button>
+            )}
+            {sending && (
+              <div className="text-center text-[13px] text-gray-500 py-2">
+                Sending invites... {results.length}/{chips.length}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Local Contact Book Section
+// =============================================================================
+
+function ContactBookSection({ onRetryInvite }: { onRetryInvite: (email: string) => Promise<{ success: boolean; error?: string }> }) {
+  const [contacts, setContacts] = useState<LocalContact[]>([]);
+  const [retrying, setRetrying] = useState<string | null>(null);
+
+  useEffect(() => {
+    setContacts(getContactBook());
+  }, []);
+
+  if (contacts.length === 0) return null;
+
+  const handleRetry = async (email: string) => {
+    setRetrying(email);
+    const result = await onRetryInvite(email);
+    if (result.success) {
+      removeFromContactBook(email);
+      setContacts(getContactBook());
+    }
+    setRetrying(null);
+  };
+
+  const handleRemove = (email: string) => {
+    removeFromContactBook(email);
+    setContacts(getContactBook());
+  };
+
+  return (
+    <div className="mt-6 border-2 border-dashed border-gray-200 rounded-md p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[13px] font-semibold text-gray-600">Not on NetaBridge yet</span>
+        <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-500 rounded-full">
+          {contacts.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {contacts.map((c) => (
+          <div key={c.email} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-md">
+            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-semibold flex-shrink-0">
+              {c.email[0].toUpperCase()}
+            </div>
+            <span className="flex-1 text-[13px] text-gray-700 truncate">{c.email}</span>
+            <button
+              onClick={() => handleRetry(c.email)}
+              disabled={retrying === c.email}
+              className="px-2 py-1 text-[11px] font-medium text-[#4A7DC4] border border-[#4A7DC4]/30 rounded hover:bg-[#EEF4FB] transition-colors disabled:opacity-50"
+            >
+              {retrying === c.email ? "Sending..." : "Retry Invite"}
+            </button>
+            <button
+              onClick={() => handleRemove(c.email)}
+              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Main Page
 // =============================================================================
 
 export default function ConnectionsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, logout: handleLogout } = useAuth();
+  const { refresh: refreshNotifications } = useNotifications();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showStats, setShowStats] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -672,18 +959,15 @@ export default function ConnectionsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [profileConn, setProfileConn] = useState<Connection | null>(null);
+  const [showBulkInvite, setShowBulkInvite] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) router.push("/login");
   }, [authLoading, user, router]);
 
-  // Hide stats by default on mobile
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setShowStats(false);
-    }
-  }, []);
 
   // Track connections where we've learned (via 403) that we are the requester.
   // Persists across re-fetches so the backend's missing field doesn't undo our local knowledge.
@@ -695,6 +979,7 @@ export default function ConnectionsPage() {
       const data = await apiClient.get<Connection[]>("/api/v1/connections");
       const list = Array.isArray(data) ? data : [];
       setFetchError(null);
+      setLastRefresh(new Date());
       // Merge in locally-known direction for backends that don't yet return initiated_by_me
       setConnections(list.map(c => {
         if (c.initiated_by_me === undefined && knownSentRef.current.has(c.connection_id)) {
@@ -702,6 +987,8 @@ export default function ConnectionsPage() {
         }
         return c;
       }));
+      // Keep notification badges in sync without duplicate polling
+      refreshNotifications();
     } catch (err: any) {
       // On background polls, don't wipe state — just flag the error
       if (err.status !== 401) {
@@ -715,10 +1002,10 @@ export default function ConnectionsPage() {
     fetchConnections().finally(() => setLoading(false));
   }, [user, fetchConnections]);
 
-  // Poll for new connections every 15s
+  // Poll for new connections every 5s
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(() => fetchConnections(true), 15000);
+    const interval = setInterval(() => fetchConnections(true), 5000);
     return () => clearInterval(interval);
   }, [user, fetchConnections]);
 
@@ -915,60 +1202,76 @@ export default function ConnectionsPage() {
             )}
 
             {/* Page Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <h1 className="text-[20px] md:text-[24px] font-semibold text-gray-900">Connections</h1>
-                <p className="text-[13px] md:text-[14px] text-gray-500 mt-1">
-                  Manage your network of {acceptedCount} connection{acceptedCount !== 1 ? "s" : ""}
+            <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
+              <div className="min-w-0">
+                <h1 className="text-[20px] md:text-[24px] font-semibold text-gray-900">Network</h1>
+                <p className="text-[13px] text-gray-500 mt-0.5">
+                  {acceptedCount} connection{acceptedCount !== 1 ? "s" : ""}
                 </p>
               </div>
+              {/* Desktop actions */}
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  onClick={() => setShowBulkInvite(true)}
+                  className="px-3 py-2 border border-gray-200 text-gray-600 text-[13px] font-medium rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                >
+                  <PaperPlaneTilt size={14} />
+                  Import Contacts
+                </button>
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
+                >
+                  <Plus size={18} weight="bold" />
+                  Add Contact
+                </button>
+              </div>
+              {/* Mobile: single primary action */}
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="px-3 sm:px-4 py-2 bg-[#4A7DC4] text-white text-[13px] sm:text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center gap-2"
+                className="sm:hidden px-3 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded-lg hover:bg-[#3A5A8C] transition-colors flex items-center gap-1.5 flex-shrink-0"
               >
-                <Plus size={18} weight="bold" />
-                <span className="hidden sm:inline">Invite Connection</span>
-                <span className="sm:hidden">Invite</span>
+                <Plus size={16} weight="bold" />
+                Add
               </button>
             </div>
 
-            {/* Stats */}
-            {showStats && (
-              <div className="grid grid-cols-4 gap-2 sm:gap-4 mb-6">
-                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
-                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Connected</div>
-                  <div className="text-[18px] sm:text-[24px] font-semibold text-gray-900">{acceptedCount}</div>
-                </div>
-                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
-                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Pending</div>
-                  <div className="text-[18px] sm:text-[24px] font-semibold text-amber-600">{pendingCount}</div>
-                </div>
-                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
-                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Sent</div>
-                  <div className="text-[18px] sm:text-[24px] font-semibold text-blue-600">{sentCount}</div>
-                </div>
-                <div className="bg-white border border-gray-200 rounded-md p-3 sm:p-4">
-                  <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">To Review</div>
-                  <div className="text-[18px] sm:text-[24px] font-semibold text-emerald-600">{receivedCount}</div>
-                </div>
+            {/* Stats — desktop only */}
+            <div className="hidden md:grid grid-cols-4 gap-4 mb-6">
+              <div className="bg-white border border-gray-200 rounded-md p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Connected</div>
+                <div className="text-[24px] font-semibold text-gray-900">{acceptedCount}</div>
               </div>
-            )}
+              <div className="bg-white border border-gray-200 rounded-md p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Pending</div>
+                <div className="text-[24px] font-semibold text-amber-600">{pendingCount}</div>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-md p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Sent</div>
+                <div className="text-[24px] font-semibold text-blue-600">{sentCount}</div>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-md p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">To Review</div>
+                <div className="text-[24px] font-semibold text-emerald-600">{receivedCount}</div>
+              </div>
+            </div>
 
-            {/* Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6">
-              <div className="relative w-full sm:w-80">
+            {/* Search + Filters */}
+            <div className="space-y-3 mb-4 md:mb-6">
+              <div className="relative">
                 <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search connections..."
-                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
+                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]"
                 />
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto">
-                <div className="flex gap-1 bg-gray-100 rounded-md p-1 flex-shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                {/* Filter pills */}
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
                   {[
                     { key: "all", label: "All" },
                     { key: "ACCEPTED", label: "Connected" },
@@ -977,10 +1280,10 @@ export default function ConnectionsPage() {
                     <button
                       key={f.key}
                       onClick={() => setStatusFilter(f.key as StatusFilter)}
-                      className={`px-2 sm:px-3 py-1.5 text-[11px] sm:text-[12px] font-medium rounded transition-colors whitespace-nowrap ${
+                      className={`px-3 py-1.5 text-[12px] font-medium rounded-full transition-colors whitespace-nowrap flex-shrink-0 ${
                         statusFilter === f.key
-                          ? "bg-white text-gray-900 shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
+                          ? "bg-[#4A7DC4] text-white"
+                          : "bg-gray-100 text-gray-600"
                       }`}
                     >
                       {f.label}
@@ -988,32 +1291,23 @@ export default function ConnectionsPage() {
                   ))}
                 </div>
 
-                <div className="hidden sm:block w-px h-6 bg-gray-200 flex-shrink-0" />
-
-                <div className="flex gap-1 bg-gray-100 rounded-md p-1 flex-shrink-0">
-                  <button
-                    onClick={() => setViewMode("table")}
-                    className={`p-1.5 rounded transition-colors ${viewMode === "table" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                    title="Table view"
-                  >
-                    <List size={16} />
-                  </button>
-                  <button
-                    onClick={() => setViewMode("grid")}
-                    className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                    title="Grid view"
-                  >
-                    <SquaresFour size={16} />
-                  </button>
+                {/* Desktop-only: view toggles */}
+                <div className="hidden md:flex items-center gap-2">
+                  <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+                    <button
+                      onClick={() => setViewMode("table")}
+                      className={`p-1.5 rounded transition-colors ${viewMode === "table" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <List size={16} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-white text-[#4A7DC4] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <SquaresFour size={16} />
+                    </button>
+                  </div>
                 </div>
-
-                <button
-                  onClick={() => setShowStats(!showStats)}
-                  className={`p-2 rounded-md transition-colors ${showStats ? "bg-[#EEF4FB] text-[#4A7DC4]" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
-                  title={showStats ? "Hide stats" : "Show stats"}
-                >
-                  {showStats ? <EyeSlash size={16} /> : <Eye size={16} />}
-                </button>
               </div>
             </div>
 
@@ -1047,6 +1341,7 @@ export default function ConnectionsPage() {
                             onAccept={handleAccept}
                             onReject={handleReject}
                             onDelete={requestDelete}
+                            onViewProfile={setProfileConn}
                             busy={busyId === conn.connection_id}
                           />
                         ))
@@ -1071,6 +1366,7 @@ export default function ConnectionsPage() {
                           onAccept={handleAccept}
                           onReject={handleReject}
                           onDelete={requestDelete}
+                          onViewProfile={setProfileConn}
                           busy={busyId === conn.connection_id}
                         />
                       ))}
@@ -1102,14 +1398,143 @@ export default function ConnectionsPage() {
                 )}
               </>
             )}
+            {/* Local Contact Book */}
+            <ContactBookSection onRetryInvite={handleInvite} />
           </div>
         </main>
         )}
       </div>
 
+      {/* Profile Panel — full screen on mobile, side panel on desktop */}
+      {profileConn && (
+        <>
+          {/* Desktop: side panel with backdrop */}
+          <div className="hidden md:block">
+            <div className="fixed inset-0 bg-black/30 z-50 transition-opacity" onClick={() => setProfileConn(null)} />
+            <div className="fixed right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl z-50 overflow-y-auto animate-slide-in-right">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-[16px] font-semibold text-gray-900">Contact</h2>
+                  <button onClick={() => setProfileConn(null)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
+                    <X size={18} weight="bold" />
+                  </button>
+                </div>
+                <div className="flex flex-col items-center mb-6">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-3xl font-semibold mb-3">
+                    {(profileConn.partner?.display_name?.[0] || profileConn.partner?.email?.[0] || "?").toUpperCase()}
+                  </div>
+                  <h3 className="text-[18px] font-semibold text-gray-900">{profileConn.partner?.display_name || "Unknown"}</h3>
+                  <p className="text-[13px] text-gray-500 mt-1">{profileConn.partner?.email}</p>
+                  <div className="mt-2"><StatusBadge status={profileConn.status} initiatedByMe={profileConn.initiated_by_me} /></div>
+                </div>
+                <div className="space-y-4 border-t border-gray-100 pt-4">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Status</div>
+                    <div className="text-[14px] text-gray-700">
+                      {profileConn.status === "ACCEPTED" ? "Connected" : profileConn.status === "PENDING" ? (profileConn.initiated_by_me === true ? "Invite Sent" : profileConn.initiated_by_me === false ? "Invite Received" : "Pending") : profileConn.status}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Connected since</div>
+                    <div className="text-[14px] text-gray-700">{new Date(profileConn.updated_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</div>
+                  </div>
+                  {profileConn.partner?.created_at && (
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Member since</div>
+                      <div className="text-[14px] text-gray-700">{new Date(profileConn.partner.created_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</div>
+                    </div>
+                  )}
+                </div>
+                {profileConn.status === "ACCEPTED" && (
+                  <div className="mt-6 flex gap-2">
+                    <a href={`mailto:${profileConn.partner?.email}`} className="flex-1 px-3 py-2 border border-gray-200 text-gray-700 text-[13px] font-medium rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+                      <EnvelopeSimple size={16} />Email
+                    </a>
+                    <button onClick={() => { setProfileConn(null); router.push(`/messages?user=${profileConn.partner?.id}`); }} className="flex-1 px-3 py-2 bg-[#4A7DC4] text-white text-[13px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors flex items-center justify-center gap-2">
+                      <ChatText size={16} />Message
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile: full-screen profile */}
+          <div className="md:hidden fixed inset-0 z-50 bg-white flex flex-col animate-slide-up">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-4 h-14 border-b border-gray-200 flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}>
+              <button onClick={() => setProfileConn(null)} className="p-1.5 text-white/80 hover:text-white">
+                <CaretLeft size={20} weight="bold" />
+              </button>
+              <h1 className="text-[16px] font-semibold text-white">Contact</h1>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex flex-col items-center pt-8 pb-6 px-6 text-center">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-3xl font-semibold mb-3">
+                  {(profileConn.partner?.display_name?.[0] || profileConn.partner?.email?.[0] || "?").toUpperCase()}
+                </div>
+                <h2 className="text-[20px] font-semibold text-gray-900">{profileConn.partner?.display_name || "Unknown"}</h2>
+                <p className="text-[14px] text-gray-500 mt-1">{profileConn.partner?.email}</p>
+                <div className="mt-2"><StatusBadge status={profileConn.status} initiatedByMe={profileConn.initiated_by_me} /></div>
+              </div>
+
+              {/* Actions */}
+              {profileConn.status === "ACCEPTED" && (
+                <div className="flex gap-3 px-4 mb-6">
+                  <button
+                    onClick={() => { setProfileConn(null); router.push(`/messages?user=${profileConn.partner?.id}`); }}
+                    className="flex-1 px-4 py-3 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ChatText size={18} />
+                    Message
+                  </button>
+                  <a
+                    href={`mailto:${profileConn.partner?.email}`}
+                    className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 text-[14px] font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    <EnvelopeSimple size={18} />
+                    Email
+                  </a>
+                </div>
+              )}
+
+              {/* Details */}
+              <div className="mx-4 bg-gray-50 rounded-xl p-4 space-y-4">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Status</div>
+                  <div className="text-[14px] text-gray-700">
+                    {profileConn.status === "ACCEPTED" ? "Connected" : profileConn.status === "PENDING" ? (profileConn.initiated_by_me === true ? "Invite Sent" : profileConn.initiated_by_me === false ? "Invite Received" : "Pending") : profileConn.status}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Connected since</div>
+                  <div className="text-[14px] text-gray-700">{new Date(profileConn.updated_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</div>
+                </div>
+                {profileConn.partner?.created_at && (
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Member since</div>
+                    <div className="text-[14px] text-gray-700">{new Date(profileConn.partner.created_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       <InviteModal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
+        onInvite={handleInvite}
+        userEmail={user?.email || ""}
+      />
+
+      <BulkInviteModal
+        isOpen={showBulkInvite}
+        onClose={() => setShowBulkInvite(false)}
         onInvite={handleInvite}
         userEmail={user?.email || ""}
       />

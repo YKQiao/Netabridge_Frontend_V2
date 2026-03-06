@@ -190,33 +190,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchUser = useCallback(async (): Promise<AuthUser | null> => {
     try {
       const res = await authFetch(AUTH_ENDPOINTS.me);
-      if (!res.ok) return null;
-      const sessionData = await res.json();
+      if (res.ok) {
+        const sessionData = await res.json();
 
-      //  /auth/me returns { oid, email, name } – remap to AuthUser shape
-      const partial: AuthUser = {
-        id: sessionData.id ?? sessionData.oid ?? "unknown",
-        email: sessionData.email ?? "",
-        display_name:
-          sessionData.display_name ?? sessionData.name ?? sessionData.email ?? "User",
-      };
+        //  /auth/me returns { oid, email, name } – remap to AuthUser shape
+        const partial: AuthUser = {
+          id: sessionData.id ?? sessionData.oid ?? "unknown",
+          email: sessionData.email ?? "",
+          display_name:
+            sessionData.display_name ?? sessionData.name ?? sessionData.email ?? "User",
+        };
 
-      // Silently enrich with full DB profile (best-effort)
-      try {
+        // Silently enrich with full DB profile (best-effort)
+        try {
+          const profileRes = await authFetch(AUTH_ENDPOINTS.usersMe);
+          if (profileRes.ok) {
+            const profile = await profileRes.json();
+            return {
+              id: profile.id ?? partial.id,
+              email: profile.email ?? partial.email,
+              display_name: profile.display_name ?? partial.display_name,
+            };
+          }
+        } catch {
+          // Ignore – use the session data we already have
+        }
+
+        return partial;
+      }
+
+      // /auth/me failed (no session cookie) — fall back to /users/me if we have a Bearer token
+      if (getBearerToken()) {
         const profileRes = await authFetch(AUTH_ENDPOINTS.usersMe);
         if (profileRes.ok) {
           const profile = await profileRes.json();
           return {
-            id: profile.id ?? partial.id,
-            email: profile.email ?? partial.email,
-            display_name: profile.display_name ?? partial.display_name,
+            id: profile.id ?? "unknown",
+            email: profile.email ?? "",
+            display_name: profile.display_name ?? profile.email ?? "User",
           };
         }
-      } catch {
-        // Ignore – use the session data we already have
       }
 
-      return partial;
+      return null;
     } catch {
       return null;
     }

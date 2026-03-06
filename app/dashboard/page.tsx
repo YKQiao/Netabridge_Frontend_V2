@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardSkeleton } from "@/components/ui/SkeletonLoader";
+import { apiClient } from "@/lib/api/client";
 import {
   House,
   Robot,
-  Package,
-  ShoppingCart,
-  Handshake,
+  Storefront,
   UsersThree,
   MagnifyingGlass,
   Gear,
@@ -33,11 +32,13 @@ import {
   UserSwitch,
   List,
   ChatText,
+  Warning,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { LogoWithName } from "@/components/ui/Logo";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
+import { useNotifications } from "@/lib/notifications/NotificationContext";
 
 // =============================================================================
 // Types
@@ -62,41 +63,39 @@ interface NavSection {
   items: NavItem[];
 }
 
-interface StatCard {
-  label: string;
-  value: string;
-  trend: { value: string; direction: "up" | "down" };
+// API connection shape (matches backend)
+interface ApiConnection {
+  connection_id: string;
+  partner: {
+    id: string;
+    email: string;
+    display_name: string;
+    entra_oid?: string;
+    created_at?: string;
+  };
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "BLOCKED";
+  updated_at: string;
+  initiated_by_me?: boolean;
 }
 
-interface Connection {
+interface ApiResource {
   id: string;
-  company: string;
-  contact: string;
-  industry: string;
-  level: "L1" | "L2";
-  levelVia?: string;
-  status: "active" | "pending";
-  lastActivity: string;
+  owner_id: string;
+  name: string;
+  description: string;
+  quantity: number;
+  price: number | null;
+  currency: string;
+  is_active: boolean;
+  created_at: string;
 }
 
-// =============================================================================
-// Mock Data
-// =============================================================================
-
-const MOCK_STATS: StatCard[] = [
-  { label: "Active Connections", value: "24", trend: { value: "3 this month", direction: "up" } },
-  { label: "Pending Requests", value: "5", trend: { value: "2 new", direction: "up" } },
-  { label: "My Resources", value: "12", trend: { value: "4 active", direction: "up" } },
-  { label: "Response Rate", value: "94%", trend: { value: "2%", direction: "down" } },
-];
-
-const MOCK_CONNECTIONS: Connection[] = [
-  { id: "1", company: "SpinTech Yarns", contact: "Raj Patel", industry: "Cotton Yarn", level: "L1", status: "active", lastActivity: "2 hours ago" },
-  { id: "2", company: "Golden Loom Textiles", contact: "Sarah Chen", industry: "Fabric", level: "L1", status: "active", lastActivity: "Yesterday" },
-  { id: "3", company: "EcoWear Fashions", contact: "Mike Torres", industry: "Apparel", level: "L2", levelVia: "SpinTech", status: "pending", lastActivity: "3 days ago" },
-  { id: "4", company: "Pacific Trade Co", contact: "Lisa Wang", industry: "Logistics", level: "L1", status: "active", lastActivity: "1 week ago" },
-  { id: "5", company: "Nordic Supplies", contact: "Erik Larsson", industry: "Raw Materials", level: "L2", levelVia: "Pacific Trade", status: "active", lastActivity: "2 days ago" },
-];
+interface DashboardStats {
+  activeConnections: number;
+  pendingRequests: number;
+  myResources: number;
+  sentInvites: number;
+}
 
 // =============================================================================
 // Components
@@ -163,15 +162,11 @@ function UserDropdown({ user, onLogout }: { user: User | null; onLogout: () => v
 
       {isOpen && (
         <>
-          {/* Backdrop */}
           <div
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-
-          {/* Dropdown */}
           <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50 animate-scale-fade">
-            {/* User Info */}
             <div className="px-4 py-3 border-b border-gray-100">
               <div className="text-sm font-semibold text-gray-900">
                 {user?.display_name || "User"}
@@ -180,21 +175,19 @@ function UserDropdown({ user, onLogout }: { user: User | null; onLogout: () => v
                 {user?.email}
               </div>
             </div>
-
-            {/* Account Section */}
             <div className="py-1.5 border-b border-gray-100">
               <div className="px-4 py-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Account</span>
               </div>
-              <a
+              <Link
                 href="/settings"
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 <User size={16} weight="regular" className="text-gray-400" />
                 My Profile
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/settings"
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
                 onClick={() => setIsOpen(false)}
@@ -202,22 +195,20 @@ function UserDropdown({ user, onLogout }: { user: User | null; onLogout: () => v
                 <GearSix size={16} weight="regular" className="text-gray-400" />
                 Account Settings
                 <CaretRight size={12} weight="bold" className="text-gray-300 ml-auto" />
-              </a>
+              </Link>
             </div>
-
-            {/* Organization Section */}
             <div className="py-1.5 border-b border-gray-100">
               <div className="px-4 py-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Organization</span>
               </div>
-              <a
+              <Link
                 href="/settings/organization"
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 <Buildings size={16} weight="regular" className="text-gray-400" />
                 Organization Settings
-              </a>
+              </Link>
               <button
                 disabled
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-400 w-full cursor-not-allowed"
@@ -227,28 +218,24 @@ function UserDropdown({ user, onLogout }: { user: User | null; onLogout: () => v
                 <span className="ml-auto text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-400">Soon</span>
               </button>
             </div>
-
-            {/* Other */}
             <div className="py-1.5 border-b border-gray-100">
-              <a
-                href="/notifications"
+              <Link
+                href="/settings/notifications"
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 <BellRinging size={16} weight="regular" className="text-gray-400" />
                 Notifications
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/help"
                 className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 <Question size={16} weight="regular" className="text-gray-400" />
                 Help & Support
-              </a>
+              </Link>
             </div>
-
-            {/* Switch & Logout */}
             <div className="py-1.5">
               <button
                 disabled
@@ -288,22 +275,16 @@ function ShellHeader({ user, onLogout, onMenuClick }: ShellHeaderProps) {
       className="h-14 flex items-center justify-between px-4 md:px-6 flex-shrink-0"
       style={{ background: "linear-gradient(135deg, #5B8FD4 0%, #4A7DC4 50%, #3D6BA8 100%)" }}
     >
-      {/* Left Side: Hamburger (mobile) + Logo */}
       <div className="flex items-center gap-3">
-        {/* Hamburger Menu Button (Mobile Only) */}
         <button
           onClick={onMenuClick}
-          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors md:hidden"
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors hidden"
           aria-label="Open menu"
         >
           <List size={20} weight="bold" />
         </button>
-
-        {/* Logo Lockup */}
         <LogoWithName variant="white" size="md" />
       </div>
-
-      {/* Actions */}
       <div className="flex items-center gap-2">
         <NotificationPanel />
         <div className="hidden sm:block w-px h-5 bg-white/20 mx-2" />
@@ -328,6 +309,7 @@ function Sidebar({
   mobileOpen = false,
   onMobileClose,
 }: SidebarProps) {
+  const { pendingConnections, unreadMessages } = useNotifications();
   const navSections: NavSection[] = [
     {
       title: "Overview",
@@ -339,15 +321,14 @@ function Sidebar({
     {
       title: "Trade",
       items: [
-        { icon: <Package size={18} weight="regular" />, label: "My Resources", href: "/resources" },
-        { icon: <ShoppingCart size={18} weight="regular" />, label: "Buy Requests", href: "/buy-requests", badge: 3 },
+        { icon: <Storefront size={18} weight="regular" />, label: "Resources", href: "/marketplace" },
       ],
     },
     {
       title: "Network",
       items: [
-        { icon: <UsersThree size={18} weight="regular" />, label: "Connections", href: "/connections" },
-        { icon: <ChatText size={18} weight="regular" />, label: "Messages", href: "/messages" },
+        { icon: <UsersThree size={18} weight="regular" />, label: "Network", href: "/connections", badge: pendingConnections || undefined },
+        { icon: <ChatText size={18} weight="regular" />, label: "Messages", href: "/messages", badge: unreadMessages || undefined },
         { icon: <MagnifyingGlass size={18} weight="regular" />, label: "Discover", href: "/discover" },
       ],
     },
@@ -355,7 +336,6 @@ function Sidebar({
 
   const sidebarContent = (
     <nav className="py-4 flex flex-col h-full">
-      {/* Nav Sections */}
       <div className="flex-1">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
@@ -369,7 +349,7 @@ function Sidebar({
             {collapsed && <div className="h-2" />}
             <div className="space-y-0.5 px-3">
               {section.items.map((item) => (
-                <a
+                <Link
                   key={item.href}
                   href={item.href}
                   onClick={onMobileClose}
@@ -395,14 +375,12 @@ function Sidebar({
                   {collapsed && item.badge && (
                     <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
                   )}
-                </a>
+                </Link>
               ))}
             </div>
           </div>
         ))}
       </div>
-
-      {/* Collapse Toggle Button (Desktop only) */}
       {onToggle && (
         <div className="hidden md:block px-3 pb-4 border-t border-gray-100 pt-4">
           <button
@@ -429,15 +407,12 @@ function Sidebar({
 
   return (
     <>
-      {/* Mobile Overlay Backdrop */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200"
           onClick={onMobileClose}
         />
       )}
-
-      {/* Desktop Sidebar */}
       <aside
         className={`
           hidden md:flex flex-col bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto overflow-x-hidden
@@ -447,8 +422,6 @@ function Sidebar({
       >
         {sidebarContent}
       </aside>
-
-      {/* Mobile Sidebar (Overlay) */}
       <aside
         className={`
           fixed top-0 left-0 h-full w-60 bg-white border-r border-gray-200 z-50 md:hidden
@@ -456,7 +429,6 @@ function Sidebar({
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
-        {/* Mobile Header with Close Button */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <LogoWithName variant="color" size="sm" />
           <button
@@ -472,100 +444,71 @@ function Sidebar({
   );
 }
 
-function StatCardComponent({ stat }: { stat: StatCard }) {
-  const isUp = stat.trend.direction === "up";
-
+function StatCardComponent({ label, value }: { label: string; value: number }) {
   return (
     <div className="bg-white border border-gray-200 rounded-md p-5">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
-        {stat.label}
+        {label}
       </div>
-      <div className="text-[28px] font-semibold text-gray-900 leading-none mb-2">
-        {stat.value}
-      </div>
-      <div className={`flex items-center gap-1 text-[12px] ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-        {isUp ? <CaretUp size={12} weight="fill" /> : <CaretDown size={12} weight="fill" />}
-        <span>{stat.trend.value}</span>
+      <div className="text-[28px] font-semibold text-gray-900 leading-none">
+        {value}
       </div>
     </div>
   );
 }
 
-function InfoStrip() {
-  return (
-    <div className="bg-[#EEF4FB] border-l-4 border-[#4A7DC4] rounded-r px-4 py-3 flex items-center gap-3">
-      <Lightning size={18} weight="fill" className="text-[#4A7DC4] flex-shrink-0" />
-      <span className="text-[13px] text-gray-700">
-        <strong className="font-semibold">AI Suggestion:</strong>{" "}
-        3 suppliers in your network match your recent cotton yarn inquiry.{" "}
-        <button className="text-[#4A7DC4] font-medium hover:underline">Ask me to connect you!</button>
-      </span>
-    </div>
-  );
-}
+function ConnectionsTable({ connections }: { connections: ApiConnection[] }) {
+  const router = useRouter();
 
-function ConnectionLevelBadge({ level, via }: { level: "L1" | "L2"; via?: string }) {
-  const isL1 = level === "L1";
+  if (connections.length === 0) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-gray-900">Recent Connections</h2>
+          <Link href="/connections" className="px-3 py-1.5 bg-[#4A7DC4] text-white text-[12px] font-medium rounded hover:bg-[#3A5A8C] transition-colors">
+            + Add Connection
+          </Link>
+        </div>
+        <div className="py-12 text-center text-gray-500">
+          <UsersThree size={40} className="mx-auto mb-3 text-gray-300" />
+          <p className="text-[14px]">No connections yet</p>
+          <p className="text-[13px] text-gray-400 mt-1">Invite colleagues to build your network</p>
+        </div>
+      </div>
+    );
+  }
 
-  return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className={`w-2 h-2 rounded-full ${isL1 ? "bg-emerald-500" : "bg-[#4A7DC4]"}`}
-      />
-      <span className={`text-[12px] font-medium ${isL1 ? "text-emerald-700" : "text-[#4A7DC4]"}`}>
-        {isL1 ? "Direct" : `Via ${via}`}
-      </span>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: "active" | "pending" }) {
-  const isActive = status === "active";
-
-  return (
-    <span
-      className={`
-        inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium
-        ${isActive
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-amber-50 text-amber-700"
-        }
-      `}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-amber-500"}`} />
-      {isActive ? "Active" : "Pending"}
-    </span>
-  );
-}
-
-function ConnectionsTable({ connections }: { connections: Connection[] }) {
   return (
     <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="text-[15px] font-semibold text-gray-900">Recent Connections</h2>
-        <button className="px-3 py-1.5 bg-[#4A7DC4] text-white text-[12px] font-medium rounded hover:bg-[#3A5A8C] transition-colors">
+        <Link href="/connections" className="px-3 py-1.5 bg-[#4A7DC4] text-white text-[12px] font-medium rounded hover:bg-[#3A5A8C] transition-colors">
           + Add Connection
-        </button>
+        </Link>
       </div>
 
       {/* Mobile Card View */}
       <div className="md:hidden divide-y divide-gray-100">
         {connections.map((conn) => (
           <div
-            key={conn.id}
+            key={conn.connection_id}
             className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+            onClick={() => router.push("/connections")}
           >
             <div className="flex items-start justify-between mb-2">
-              <div>
-                <div className="text-[14px] font-semibold text-gray-900">{conn.company}</div>
-                <div className="text-[13px] text-gray-600">{conn.contact}</div>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-sm font-semibold">
+                  {(conn.partner?.display_name?.[0] || conn.partner?.email?.[0] || "?").toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-[14px] font-semibold text-gray-900">{conn.partner?.display_name || "Unknown"}</div>
+                  <div className="text-[12px] text-gray-500 truncate">{conn.partner?.email}</div>
+                </div>
               </div>
               <StatusBadge status={conn.status} />
             </div>
-            <div className="text-[12px] text-gray-500 mb-2">{conn.industry}</div>
-            <div className="flex items-center justify-between">
-              <ConnectionLevelBadge level={conn.level} via={conn.levelVia} />
-              <span className="text-[12px] text-gray-400">{conn.lastActivity}</span>
+            <div className="text-[12px] text-gray-400">
+              {new Date(conn.updated_at).toLocaleDateString()}
             </div>
           </div>
         ))}
@@ -576,37 +519,36 @@ function ConnectionsTable({ connections }: { connections: Connection[] }) {
         <table className="w-full">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Company</th>
               <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contact</th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Industry</th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Connection</th>
               <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Status</th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Last Activity</th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Date</th>
             </tr>
           </thead>
           <tbody>
             {connections.map((conn) => (
               <tr
-                key={conn.id}
+                key={conn.connection_id}
                 className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => router.push("/connections")}
               >
                 <td className="px-5 py-3.5">
-                  <span className="text-[13px] font-semibold text-gray-900">{conn.company}</span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className="text-[13px] text-gray-600">{conn.contact}</span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className="text-[13px] text-gray-600">{conn.industry}</span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <ConnectionLevelBadge level={conn.level} via={conn.levelVia} />
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#4A7DC4] to-[#354A5F] flex items-center justify-center text-white text-sm font-semibold">
+                      {(conn.partner?.display_name?.[0] || conn.partner?.email?.[0] || "?").toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-semibold text-gray-900">{conn.partner?.display_name || "Unknown"}</div>
+                      <div className="text-[12px] text-gray-500">{conn.partner?.email}</div>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-5 py-3.5">
                   <StatusBadge status={conn.status} />
                 </td>
                 <td className="px-5 py-3.5">
-                  <span className="text-[13px] text-gray-400">{conn.lastActivity}</span>
+                  <span className="text-[13px] text-gray-400">
+                    {new Date(conn.updated_at).toLocaleDateString()}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -617,12 +559,39 @@ function ConnectionsTable({ connections }: { connections: Connection[] }) {
   );
 }
 
+function StatusBadge({ status }: { status: ApiConnection["status"] }) {
+  const styles: Record<string, string> = {
+    ACCEPTED: "bg-emerald-50 text-emerald-700",
+    PENDING: "bg-amber-50 text-amber-700",
+    REJECTED: "bg-red-50 text-red-700",
+    BLOCKED: "bg-gray-100 text-gray-600",
+  };
+  const dotStyles: Record<string, string> = {
+    ACCEPTED: "bg-emerald-500",
+    PENDING: "bg-amber-500",
+    REJECTED: "bg-red-500",
+    BLOCKED: "bg-gray-400",
+  };
+  const labels: Record<string, string> = {
+    ACCEPTED: "Connected",
+    PENDING: "Pending",
+    REJECTED: "Rejected",
+    BLOCKED: "Blocked",
+  };
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium ${styles[status]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dotStyles[status]}`} />
+      {labels[status]}
+    </span>
+  );
+}
+
 function AIAssistantPanel({ onClose }: { onClose: () => void }) {
   const [message, setMessage] = useState("");
 
   return (
     <div className="fixed bottom-6 right-6 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden animate-scale-fade z-50">
-      {/* Header */}
       <div className="bg-gradient-to-r from-[#4A7DC4] to-[#3A5A8C] px-4 py-3 flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
           <Robot size={20} weight="fill" className="text-white" />
@@ -638,28 +607,13 @@ function AIAssistantPanel({ onClose }: { onClose: () => void }) {
           <X size={16} weight="bold" />
         </button>
       </div>
-
-      {/* Messages */}
       <div className="p-4 h-64 overflow-y-auto bg-gray-50">
         <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
           <p className="text-[13px] text-gray-700 leading-relaxed">
-            Hello! I found <strong>3 suppliers</strong> matching your cotton yarn requirements.
-            Would you like me to show you their profiles and pricing?
+            Hello! How can I help you today? I can assist with finding connections, managing resources, and more.
           </p>
         </div>
-
-        {/* Quick Actions */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button className="px-3 py-1.5 bg-white border border-gray-200 rounded text-[12px] font-medium text-gray-600 hover:border-[#4A7DC4] hover:text-[#4A7DC4] transition-colors">
-            Show suppliers
-          </button>
-          <button className="px-3 py-1.5 bg-white border border-gray-200 rounded text-[12px] font-medium text-gray-600 hover:border-[#4A7DC4] hover:text-[#4A7DC4] transition-colors">
-            Compare prices
-          </button>
-        </div>
       </div>
-
-      {/* Input */}
       <div className="p-3 border-t border-gray-200 bg-white">
         <div className="flex gap-2">
           <input
@@ -695,32 +649,65 @@ function AIAssistantTrigger({ onClick }: { onClick: () => void }) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isLoading: loading, logout } = useAuth();
+  const { user, isLoading: authLoading, logout } = useAuth();
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  const [connections, setConnections] = useState<ApiConnection[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({ activeConnections: 0, pendingRequests: 0, myResources: 0, sentInvites: 0 });
+  const [dataLoading, setDataLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Redirect to login if not authenticated after loading completes
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/login");
     }
-  }, [loading, user, router]);
+  }, [authLoading, user, router]);
+
+  const fetchDashboardData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [connsRes, resourcesRes] = await Promise.allSettled([
+        apiClient.get<ApiConnection[]>("/api/v1/connections"),
+        apiClient.get<ApiResource[]>("/api/v1/resources"),
+      ]);
+
+      const conns = connsRes.status === "fulfilled" && Array.isArray(connsRes.value) ? connsRes.value : [];
+      const resources = resourcesRes.status === "fulfilled" && Array.isArray(resourcesRes.value) ? resourcesRes.value : [];
+
+      setConnections(conns.slice(0, 5)); // Show latest 5
+      setStats({
+        activeConnections: conns.filter(c => c.status === "ACCEPTED").length,
+        pendingRequests: conns.filter(c => c.status === "PENDING" && c.initiated_by_me === false).length,
+        myResources: resources.length,
+        sentInvites: conns.filter(c => c.status === "PENDING" && c.initiated_by_me === true).length,
+      });
+      setFetchError(null);
+    } catch (err: any) {
+      if (err.status !== 401) {
+        setFetchError("Could not load dashboard data");
+      }
+    } finally {
+      setDataLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) fetchDashboardData();
+  }, [user, fetchDashboardData]);
 
   const handleLogout = logout;
+  const loading = authLoading || (user ? dataLoading : false);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FA]">
-      {/* Shell Header - always visible */}
       <ShellHeader
         user={user}
         onLogout={handleLogout}
         onMenuClick={() => setSidebarMobileOpen(true)}
       />
 
-      {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar - always visible */}
         <Sidebar
           currentPath="/dashboard"
           collapsed={sidebarCollapsed}
@@ -729,7 +716,6 @@ export default function DashboardPage() {
           onMobileClose={() => setSidebarMobileOpen(false)}
         />
 
-        {/* Main Content - show skeleton while loading */}
         {loading ? (
           <main className="flex-1 overflow-auto">
             <DashboardSkeleton />
@@ -745,30 +731,37 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 animate-stagger">
-              {MOCK_STATS.map((stat) => (
-                <StatCardComponent key={stat.label} stat={stat} />
-              ))}
-            </div>
+            {/* Fetch Error */}
+            {fetchError && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-center gap-2 text-[13px] text-amber-700">
+                <Warning size={16} weight="fill" className="flex-shrink-0" />
+                <span className="flex-1">{fetchError}</span>
+                <button onClick={() => fetchDashboardData()} className="px-2 py-1 text-[12px] font-medium bg-amber-100 rounded hover:bg-amber-200 transition-colors">
+                  Retry
+                </button>
+              </div>
+            )}
 
-            {/* Info Strip */}
-            <div className="mb-6">
-              <InfoStrip />
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <StatCardComponent label="Active Connections" value={stats.activeConnections} />
+              <StatCardComponent label="Pending Requests" value={stats.pendingRequests} />
+              <StatCardComponent label="Sent Invites" value={stats.sentInvites} />
+              <StatCardComponent label="My Resources" value={stats.myResources} />
             </div>
 
             {/* Connections Table */}
-            <ConnectionsTable connections={MOCK_CONNECTIONS} />
+            <ConnectionsTable connections={connections} />
 
             {/* View All Link */}
             <div className="mt-4 flex justify-end">
-              <a
+              <Link
                 href="/connections"
                 className="flex items-center gap-1.5 text-[13px] font-medium text-[#4A7DC4] hover:text-[#3A5A8C] transition-colors"
               >
                 View all connections
                 <ArrowRight size={14} weight="bold" />
-              </a>
+              </Link>
             </div>
           </div>
         </main>

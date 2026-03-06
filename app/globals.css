@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Safe area for iPhone notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* =============================================================================
    NetaBridge Design System v2.1
    Primary brand color derived from logo: #4A7DC4
@@ -194,6 +199,33 @@ body {
 
 .animate-slide-in {
   animation: slideIn 0.4s ease-out forwards;
+}
+
+/* Slide in panel from right edge */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.25s ease-out forwards;
+}
+
+/* Slide up from bottom (mobile full-screen sheets) */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up {
+  animation: slideUp 0.25s ease-out forwards;
+}
+
+/* Hide scrollbar but keep scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* Fade in up */

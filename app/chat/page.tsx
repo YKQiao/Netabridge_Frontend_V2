@@ -312,7 +312,7 @@ function ExternalLink({ url, label }: { url: string; label?: string }) {
 function EmailLink({ email }: { email: string }) {
   return (
     <a
-      href={`mailto:${email}`}
+      href={`/connections`}
       className="inline-flex items-center gap-1 text-[#4A7DC4] hover:underline decoration-[#4A7DC4]/40 underline-offset-2"
     >
       <EnvelopeSimple size={14} className="flex-shrink-0" />
@@ -1128,7 +1128,7 @@ function formatInlineText(text: string): string {
     .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-[13px] font-mono text-gray-800">$1</code>')
     .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-[#4A7DC4] hover:underline inline-flex items-center gap-1">$1<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 256 256" fill="currentColor"><path d="M224,104a8,8,0,0,1-16,0V59.31l-66.34,66.35a8,8,0,0,1-11.32-11.32L196.69,48H152a8,8,0,0,1,0-16h64a8,8,0,0,1,8,8Zm-40,24a8,8,0,0,0-8,8v72H48V80h72a8,8,0,0,0,0-16H48A16,16,0,0,0,32,80V208a16,16,0,0,0,16,16H176a16,16,0,0,0,16-16V136A8,8,0,0,0,184,128Z"/></svg></a>')
     .replace(/https?:\/\/[^\s<>"']+/g, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#4A7DC4] hover:underline inline-flex items-center gap-1">${url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 30)}${url.length > 40 ? '...' : ''}<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 256 256" fill="currentColor"><path d="M224,104a8,8,0,0,1-16,0V59.31l-66.34,66.35a8,8,0,0,1-11.32-11.32L196.69,48H152a8,8,0,0,1,0-16h64a8,8,0,0,1,8,8Zm-40,24a8,8,0,0,0-8,8v72H48V80h72a8,8,0,0,0,0-16H48A16,16,0,0,0,32,80V208a16,16,0,0,0,16,16H176a16,16,0,0,0,16-16V136A8,8,0,0,0,184,128Z"/></svg></a>`)
-    .replace(/[\w.-]+@[\w.-]+\.\w+/g, (email) => `<a href="mailto:${email}" class="text-[#4A7DC4] hover:underline">${email}</a>`)
+    .replace(/[\w.-]+@[\w.-]+\.\w+/g, (email) => `<a href="/connections" class="text-[#4A7DC4] hover:underline">${email}</a>`)
     .replace(/\n/g, "<br/>");
 }
 
