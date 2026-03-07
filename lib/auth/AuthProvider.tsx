@@ -300,7 +300,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Navigate the full page so the browser follows the backend's
     // redirect chain (session cookie clear → Entra global logout).
-    window.location.href = `${API_BASE_URL}${AUTH_ENDPOINTS.logout}`;
+    const proxyBaseUrl = encodeURIComponent(window.location.origin);
+    const logoutUrl = `${API_BASE_URL}${AUTH_ENDPOINTS.logout}`;
+    const separator = logoutUrl.includes("?") ? "&" : "?";
+    window.location.href = `${logoutUrl}${separator}proxy_base_url=${proxyBaseUrl}`;
   }, []);
 
   return (
