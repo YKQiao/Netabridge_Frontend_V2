@@ -21,7 +21,11 @@ import {
   CaretRight,
   Pencil,
   X,
+  QrCode,
+  Link as LinkIcon,
+  Copy,
 } from "@phosphor-icons/react";
+import QRCode from "react-qr-code";
 
 // =============================================================================
 // Types
@@ -29,6 +33,7 @@ import {
 
 interface UserProfile {
   id: string;
+  entra_oid?: string;
   email: string;
   display_name: string;
   avatar_url?: string;
@@ -37,6 +42,8 @@ interface UserProfile {
 
 interface FormData {
   display_name: string;
+  company_name: string;
+  job_title: string;
 }
 
 interface FormErrors {
@@ -44,6 +51,9 @@ interface FormErrors {
 }
 
 type SaveStatus = "idle" | "saving" | "success" | "error";
+
+// localStorage key for company/job fields (stored locally until backend supports them)
+const getLocalProfileKey = (userId: string) => `neta_profile_extra_${userId}`;
 
 // =============================================================================
 // Validation
@@ -107,8 +117,10 @@ function SaveStatusIndicator({ status }: { status: SaveStatus }) {
 // Mobile Profile Hub — the main view on phones
 // =============================================================================
 
-function MobileProfileHub({ user, memberSince, onEditProfile, onLogout }: {
-  user: UserProfile; memberSince: string | null; onEditProfile: () => void; onLogout: () => void;
+function MobileProfileHub({ user, memberSince, entraOid, companyName, jobTitle, onEditProfile, onLogout }: {
+  user: UserProfile; memberSince: string | null; entraOid: string | null;
+  companyName?: string; jobTitle?: string;
+  onEditProfile: () => void; onLogout: () => void;
 }) {
   const initials = (user.display_name || user.email || "U")
     .split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -122,6 +134,8 @@ function MobileProfileHub({ user, memberSince, onEditProfile, onLogout }: {
             {initials}
           </div>
           <h1 className="text-[18px] font-semibold text-gray-900">{user.display_name || "User"}</h1>
+          {jobTitle && <p className="text-[12px] font-medium text-[#4A7DC4] mt-0.5">{jobTitle}</p>}
+          {companyName && <p className="text-[12px] text-gray-500">{companyName}</p>}
           <p className="text-[13px] text-gray-500 mt-0.5">{user.email}</p>
           {memberSince && (
             <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
@@ -135,6 +149,29 @@ function MobileProfileHub({ user, memberSince, onEditProfile, onLogout }: {
           >
             <Pencil size={14} />
             Edit Profile
+          </button>
+        </div>
+      </div>
+
+      {/* Share Profile Card (Mobile) */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-4 p-5">
+        <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2 mb-4">
+          <QrCode size={18} className="text-[#4A7DC4]" />
+          Share Profile
+        </h2>
+        <div className="flex flex-col items-center">
+          <div className="p-3 bg-white border border-gray-200 rounded-lg mb-4">
+            <QRCode value={`${window.location.origin}/user/${user.id}`} size={120} />
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`${window.location.origin}/user/${user.id}`);
+              alert("Link copied to clipboard!");
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[13px] font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <Copy size={16} />
+            Copy Public Link
           </button>
         </div>
       </div>
@@ -197,17 +234,22 @@ function EditProfileSheet({ user, onClose, formData, errors, hasChanges, saveSta
         <FormField label="Display Name" htmlFor="display_name" required error={errors.display_name}>
           <TextInput id="display_name" value={formData.display_name} onChange={(v) => onUpdateField("display_name", v)} placeholder="Enter your name" error={!!errors.display_name} icon={<User size={16} />} />
         </FormField>
+        <FormField label="Job Title" htmlFor="job_title" hint="e.g. CEO, Procurement Manager">
+          <TextInput id="job_title" value={formData.job_title} onChange={(v) => onUpdateField("job_title", v)} placeholder="Your job title" />
+        </FormField>
+        <FormField label="Company Name" htmlFor="company_name" hint="Your organisation or business name">
+          <TextInput id="company_name" value={formData.company_name} onChange={(v) => onUpdateField("company_name", v)} placeholder="Your company" />
+        </FormField>
         <FormField label="Email Address" htmlFor="email" hint="Contact support to change your email">
-          <TextInput id="email" value={user.email || ""} onChange={() => {}} disabled icon={<EnvelopeSimple size={16} />} />
+          <TextInput id="email" value={user.email || ""} onChange={() => { }} disabled icon={<EnvelopeSimple size={16} />} />
         </FormField>
       </div>
       <div className="px-4 py-3 border-t border-gray-200 bg-white safe-area-bottom">
         <button
           onClick={onSave}
           disabled={!hasChanges || saveStatus === "saving"}
-          className={`w-full flex items-center justify-center gap-2 px-4 py-3 text-[14px] font-medium rounded-xl transition-all ${
-            hasChanges && saveStatus !== "saving" ? "bg-[#4A7DC4] text-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"
-          }`}
+          className={`w-full flex items-center justify-center gap-2 px-4 py-3 text-[14px] font-medium rounded-xl transition-all ${hasChanges && saveStatus !== "saving" ? "bg-[#4A7DC4] text-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+            }`}
         >
           {saveStatus === "saving" ? <CircleNotch size={16} weight="bold" className="animate-spin" /> : <FloppyDisk size={16} />}
           Save Changes
@@ -227,11 +269,21 @@ export default function SettingsProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [formData, setFormData] = useState<FormData>({ display_name: "" });
+  const [formData, setFormData] = useState<FormData>({ display_name: "", company_name: "", job_title: "" });
   const [errors, setErrors] = useState<FormErrors>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [memberSince, setMemberSince] = useState<string | null>(null);
   const [showEditSheet, setShowEditSheet] = useState(false);
+  const [entraOid, setEntraOid] = useState<string | null>(null);
+
+  // Load company/job from localStorage when user loads
+  const loadLocalProfile = useCallback((userId: string) => {
+    try {
+      const saved = localStorage.getItem(getLocalProfileKey(userId));
+      if (saved) return JSON.parse(saved) as { company_name: string; job_title: string };
+    } catch { }
+    return { company_name: "", job_title: "" };
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !authUser) router.push("/login");
@@ -241,18 +293,34 @@ export default function SettingsProfilePage() {
     if (!authUser) return;
     const u = authUser as unknown as UserProfile;
     setUser(u);
-    setFormData({ display_name: u.display_name || "" });
+    const local = loadLocalProfile(u.id);
+    setFormData({ display_name: u.display_name || "", ...local });
     setLoading(false);
-    apiClient.get<{ created_at?: string }>("/api/v1/users/me")
-      .then((profile) => { if (profile.created_at) setMemberSince(profile.created_at); })
-      .catch(() => {});
+    apiClient.get<{ created_at?: string; entra_oid?: string }>("/api/v1/users/me")
+      .then((profile) => {
+        if (profile.created_at) setMemberSince(profile.created_at);
+        if (profile.entra_oid) setEntraOid(profile.entra_oid);
+      })
+      .catch(() => { });
   }, [authUser]);
 
   const updateField = useCallback((field: keyof FormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      // Persist company/job fields to localStorage immediately
+      if (user && (field === "company_name" || field === "job_title")) {
+        try {
+          localStorage.setItem(getLocalProfileKey(user.id), JSON.stringify({
+            company_name: field === "company_name" ? value : next.company_name,
+            job_title: field === "job_title" ? value : next.job_title,
+          }));
+        } catch { }
+      }
+      return next;
+    });
     setHasChanges(true);
     if (errors[field as keyof FormErrors]) setErrors((prev) => ({ ...prev, [field]: undefined }));
-  }, [errors]);
+  }, [errors, user]);
 
   const handleSave = async () => {
     const validationErrors = validateForm(formData);
@@ -296,6 +364,9 @@ export default function SettingsProfilePage() {
         <MobileProfileHub
           user={user}
           memberSince={memberSince}
+          entraOid={entraOid}
+          companyName={formData.company_name}
+          jobTitle={formData.job_title}
           onEditProfile={() => setShowEditSheet(true)}
           onLogout={logout}
         />
@@ -327,7 +398,13 @@ export default function SettingsProfilePage() {
                 <TextInput id="display_name_d" value={formData.display_name} onChange={(v) => updateField("display_name", v)} placeholder="Enter your name" error={!!errors.display_name} icon={<User size={16} />} />
               </FormField>
               <FormField label="Email Address" htmlFor="email_d" hint="Contact support to change your email">
-                <TextInput id="email_d" value={user.email || ""} onChange={() => {}} disabled icon={<EnvelopeSimple size={16} />} />
+                <TextInput id="email_d" value={user.email || ""} onChange={() => { }} disabled icon={<EnvelopeSimple size={16} />} />
+              </FormField>
+              <FormField label="Job Title" htmlFor="job_title_d" hint="e.g. CEO, Procurement Manager">
+                <TextInput id="job_title_d" value={formData.job_title} onChange={(v) => updateField("job_title", v)} placeholder="Your job title" />
+              </FormField>
+              <FormField label="Company Name" htmlFor="company_name_d" hint="Your organisation or business name">
+                <TextInput id="company_name_d" value={formData.company_name} onChange={(v) => updateField("company_name", v)} placeholder="Your company" />
               </FormField>
             </div>
           </div>
@@ -367,6 +444,42 @@ export default function SettingsProfilePage() {
                 </div>
               )}
             </dl>
+          </div>
+        </div>
+
+        {/* Share Profile */}
+        <div className="mt-6 bg-white border border-gray-200 rounded-md shadow-sm">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
+                <QrCode size={18} className="text-[#4A7DC4]" />
+                Share Profile
+              </h2>
+              <p className="text-[13px] text-gray-500 mt-1">Let others view your public resources</p>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/user/${user.id}`);
+                alert("Link copied to clipboard!");
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-[#4A7DC4] bg-white border border-[#4A7DC4]/30 rounded-md hover:bg-[#EEF4FB] transition-colors"
+            >
+              <Copy size={14} />
+              Copy Link
+            </button>
+          </div>
+          <div className="px-6 py-6 flex items-center gap-6">
+            <div className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm">
+              <QRCode value={`${window.location.origin}/user/${user.id}`} size={100} />
+            </div>
+            <div className="flex-1 text-[13px] text-gray-600">
+              <p className="font-medium text-gray-900 mb-1">Your QR Code</p>
+              <p>Show this code at events or meetings so others can scan and instantly view the resources you have available.</p>
+              <div className="mt-3 flex items-center gap-2 text-gray-400 bg-gray-50 px-3 py-2 rounded border border-gray-200">
+                <LinkIcon size={14} />
+                <span className="truncate flex-1 font-mono text-[11px]">{`${window.location.origin}/user/${user.id}`}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

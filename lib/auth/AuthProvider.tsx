@@ -53,6 +53,7 @@ import { getBearerToken, setBearerToken, API_BASE_URL, API_KEY } from "@/lib/api
 
 export interface AuthUser {
   id: string;
+  entra_oid?: string;
   email: string;
   display_name: string;
 }
@@ -209,6 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const profile = await profileRes.json();
             return {
               id: profile.id ?? partial.id,
+              entra_oid: profile.entra_oid ?? partial.entra_oid,
               email: profile.email ?? partial.email,
               display_name: profile.display_name ?? partial.display_name,
             };
@@ -227,6 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const profile = await profileRes.json();
           return {
             id: profile.id ?? "unknown",
+            entra_oid: profile.entra_oid,
             email: profile.email ?? "",
             display_name: profile.display_name ?? profile.email ?? "User",
           };

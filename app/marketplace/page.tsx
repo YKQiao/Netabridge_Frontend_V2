@@ -13,6 +13,7 @@ import {
   MagnifyingGlass,
   Plus,
   Trash,
+  PencilSimple,
   Package,
   ShoppingCart,
   CurrencyDollar,
@@ -45,6 +46,7 @@ interface Resource {
   price: number | null;
   currency: string;
   is_active: boolean;
+  is_public: boolean;
   created_at: string;
 }
 
@@ -56,9 +58,13 @@ interface BuyPost {
   budget_range: string | null;
   deadline: string | null;
   status: "OPEN" | "CLOSED" | "FULFILLED";
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 }
+
+// localStorage key for buy post visibility (stored locally until backend supports it)
+const getBuyPostVisibilityKey = (id: string) => `neta_buypost_public_${id}`;
 
 type Tab = "resources" | "buy-requests";
 
@@ -89,18 +95,24 @@ function Sidebar({ currentPath = "/marketplace", collapsed = false, onToggle, mo
 }) {
   const { pendingConnections, unreadMessages } = useNotifications();
   const navSections = [
-    { title: "Overview", items: [
-      { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
-      { icon: <Robot size={18} />, label: "AI Assistant", href: "/chat" },
-    ]},
-    { title: "Trade", items: [
-      { icon: <Storefront size={18} />, label: "Resources", href: "/marketplace", active: currentPath === "/marketplace" },
-    ]},
-    { title: "Network", items: [
-      { icon: <UsersThree size={18} />, label: "Network", href: "/connections", badge: pendingConnections || undefined },
-      { icon: <ChatText size={18} />, label: "Messages", href: "/messages", badge: unreadMessages || undefined },
-      { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
-    ]},
+    {
+      title: "Overview", items: [
+        { icon: <House size={18} />, label: "Dashboard", href: "/dashboard" },
+        { icon: <Robot size={18} />, label: "AI Assistant", href: "/chat" },
+      ]
+    },
+    {
+      title: "Trade", items: [
+        { icon: <Storefront size={18} />, label: "Resources", href: "/marketplace", active: currentPath === "/marketplace" },
+      ]
+    },
+    {
+      title: "Network", items: [
+        { icon: <UsersThree size={18} />, label: "Network", href: "/connections", badge: pendingConnections || undefined },
+        { icon: <ChatText size={18} />, label: "Messages", href: "/messages", badge: unreadMessages || undefined },
+        { icon: <MagnifyingGlass size={18} />, label: "Discover", href: "/discover" },
+      ]
+    },
   ];
 
   const sidebarContent = (
@@ -153,7 +165,20 @@ function Sidebar({ currentPath = "/marketplace", collapsed = false, onToggle, mo
 // Resource Components
 // =============================================================================
 
-function ResourceCard({ resource, onDelete }: { resource: Resource; onDelete: () => void }) {
+function ResourceCard({ resource, onDelete, onTogglePublic, onEdit }: {
+  resource: Resource;
+  onDelete: () => void;
+  onTogglePublic: (isPublic: boolean) => void;
+  onEdit: () => void;
+}) {
+  const [toggling, setToggling] = useState(false);
+
+  const handleToggle = async () => {
+    setToggling(true);
+    await onTogglePublic(!resource.is_public);
+    setToggling(false);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
@@ -166,19 +191,45 @@ function ResourceCard({ resource, onDelete }: { resource: Resource; onDelete: ()
             </span>
           </div>
         </div>
-        <button onClick={onDelete} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash size={16} /></button>
+        <div className="flex items-center gap-1">
+          <button onClick={onEdit} title="Edit offer" className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-blue-50 rounded transition-colors"><PencilSimple size={15} /></button>
+          <button onClick={onDelete} title="Delete offer" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash size={15} /></button>
+        </div>
       </div>
       <p className="text-[13px] text-gray-600 mb-3 line-clamp-2">{resource.description || "No description"}</p>
-      <div className="flex gap-4 text-[12px] text-gray-500">
-        <span>Qty: {resource.quantity}</span>
-        {resource.price != null && <span className="text-emerald-600 font-medium">{resource.currency || "$"}{resource.price}</span>}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4 text-[12px] text-gray-500">
+          <span>Qty: {resource.quantity}</span>
+          {resource.price != null && <span className="text-emerald-600 font-medium">{resource.currency || "$"}{resource.price}</span>}
+        </div>
+        {/* Visibility toggle */}
+        <button
+          onClick={handleToggle}
+          disabled={toggling}
+          title={resource.is_public ? "Click to make Connections Only" : "Click to make Public"}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${resource.is_public
+            ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+            : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+            } ${toggling ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+        >
+          {resource.is_public
+            ? <><Eye size={12} weight="bold" /> Public</>
+            : <><EyeSlash size={12} weight="bold" /> Connections Only</>}
+        </button>
       </div>
     </div>
   );
 }
 
-function CreateResourceModal({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (data: any) => void }) {
-  const [form, setForm] = useState({ name: "", description: "", quantity: 1, price: "", currency: "USD" });
+function EditResourceModal({ resource, onClose, onSave }: { resource: Resource; onClose: () => void; onSave: (data: any) => void }) {
+  const [form, setForm] = useState({
+    name: resource.name,
+    description: resource.description || "",
+    quantity: resource.quantity,
+    price: resource.price != null ? String(resource.price) : "",
+    currency: resource.currency || "USD",
+    is_public: resource.is_public,
+  });
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -186,7 +237,79 @@ function CreateResourceModal({ isOpen, onClose, onSave }: { isOpen: boolean; onC
     setSaving(true);
     await onSave({ ...form, price: form.price ? parseFloat(form.price) : null, quantity: Number(form.quantity) });
     setSaving(false);
-    setForm({ name: "", description: "", quantity: 1, price: "", currency: "USD" });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[18px] font-semibold text-gray-900">Edit Offer</h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">Name *</label>
+            <input type="text" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} required className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">Description</label>
+            <textarea value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Quantity</label>
+              <input type="number" min={1} value={form.quantity} onChange={(e) => setForm(f => ({ ...f, quantity: parseInt(e.target.value) || 1 }))} className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Price</label>
+              <input type="text" value={form.price} onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Currency</label>
+              <select value={form.currency} onChange={(e) => setForm(f => ({ ...f, currency: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+              </select>
+            </div>
+          </div>
+          {/* Visibility */}
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-2">Visibility</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setForm(f => ({ ...f, is_public: false }))}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-[13px] font-medium transition-all ${!form.is_public ? "border-[#4A7DC4] bg-blue-50 text-[#4A7DC4]" : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}><EyeSlash size={16} /><span>Connections Only</span>
+              </button>
+              <button type="button" onClick={() => setForm(f => ({ ...f, is_public: true }))}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-[13px] font-medium transition-all ${form.is_public ? "border-[#4A7DC4] bg-blue-50 text-[#4A7DC4]" : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}><Eye size={16} /><span>Public</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">{form.is_public ? "Anyone with your profile link can see this offer." : "Only your connections can see this offer."}</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] disabled:opacity-50">{saving ? "Saving..." : "Save Changes"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CreateResourceModal({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (data: any) => void }) {
+  const [form, setForm] = useState({ name: "", description: "", quantity: 1, price: "", currency: "USD", is_public: false });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({ ...form, price: form.price ? parseFloat(form.price) : null, quantity: Number(form.quantity) });
+    setSaving(false);
+    setForm({ name: "", description: "", quantity: 1, price: "", currency: "USD", is_public: false });
     onClose();
   };
 
@@ -226,6 +349,31 @@ function CreateResourceModal({ isOpen, onClose, onSave }: { isOpen: boolean; onC
               </select>
             </div>
           </div>
+          {/* Visibility */}
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-2">Visibility</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, is_public: false }))}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-[13px] font-medium transition-all ${!form.is_public ? "border-[#4A7DC4] bg-blue-50 text-[#4A7DC4]" : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+              >
+                <EyeSlash size={16} />
+                <span>Connections Only</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, is_public: true }))}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-[13px] font-medium transition-all ${form.is_public ? "border-[#4A7DC4] bg-blue-50 text-[#4A7DC4]" : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+              >
+                <Eye size={16} />
+                <span>Public</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">{form.is_public ? "Anyone with your profile link can see this offer." : "Only your connections can see this offer."}</p>
+          </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] disabled:opacity-50">{saving ? "Saving..." : "New Offer"}</button>
@@ -240,46 +388,63 @@ function CreateResourceModal({ isOpen, onClose, onSave }: { isOpen: boolean; onC
 // Buy Request Components
 // =============================================================================
 
-function BuyRequestStatusBadge({ status }: { status: BuyPost["status"] }) {
-  const styles = {
-    OPEN: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Open" },
-    CLOSED: { bg: "bg-gray-100", text: "text-gray-600", dot: "bg-gray-400", label: "Closed" },
-    FULFILLED: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", label: "Fulfilled" },
-  };
-  const s = styles[status];
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium ${s.bg} ${s.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      {s.label}
-    </span>
-  );
-}
 
-function BuyRequestCard({ post, onDelete, currentUserId }: { post: BuyPost; onDelete: () => void; currentUserId?: string }) {
+function BuyRequestCard({ post, onDelete, currentUserId, onTogglePublic, onEdit }: {
+  post: BuyPost & { _localPublic?: boolean };
+  onDelete: () => void;
+  currentUserId?: string;
+  onTogglePublic?: (isPublic: boolean) => void;
+  onEdit?: () => void;
+}) {
   const isOwner = currentUserId && post.owner_id === currentUserId;
+  const [toggling, setToggling] = useState(false);
+
+  const handleToggle = async () => {
+    if (!onTogglePublic) return;
+    setToggling(true);
+    await onTogglePublic(!post.is_public);
+    setToggling(false);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-[15px] font-semibold text-gray-900 mb-1">{post.title}</h3>
-          <BuyRequestStatusBadge status={post.status} />
-        </div>
+        <h3 className="text-[15px] font-semibold text-gray-900">{post.title}</h3>
         {isOwner && (
-          <button onClick={onDelete} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash size={16} /></button>
+          <div className="flex items-center gap-1">
+            <button onClick={() => onEdit && onEdit()} title="Edit request" className="p-1.5 text-gray-400 hover:text-[#4A7DC4] hover:bg-blue-50 rounded transition-colors"><PencilSimple size={15} /></button>
+            <button onClick={onDelete} title="Delete request" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash size={15} /></button>
+          </div>
         )}
       </div>
       <p className="text-[13px] text-gray-600 mb-4 line-clamp-2">{post.description}</p>
-      <div className="flex flex-wrap gap-3 text-[12px] text-gray-500">
-        {post.budget_range && <span className="flex items-center gap-1.5 text-emerald-600 font-medium"><CurrencyDollar size={14} />{post.budget_range}</span>}
-        {post.deadline && <span className="flex items-center gap-1.5"><CalendarBlank size={14} />Due: {new Date(post.deadline).toLocaleDateString()}</span>}
-        <span className="flex items-center gap-1.5"><Clock size={14} />{new Date(post.created_at).toLocaleDateString()}</span>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-wrap gap-3 text-[12px] text-gray-500">
+          {post.budget_range && <span className="flex items-center gap-1.5 text-emerald-600 font-medium"><CurrencyDollar size={14} />{post.budget_range}</span>}
+          {post.deadline && <span className="flex items-center gap-1.5"><CalendarBlank size={14} />Due: {new Date(post.deadline).toLocaleDateString()}</span>}
+          <span className="flex items-center gap-1.5"><Clock size={14} />{new Date(post.created_at).toLocaleDateString()}</span>
+        </div>
+        {/* Visibility toggle (owner only) */}
+        {isOwner && onTogglePublic && (
+          <button
+            onClick={handleToggle}
+            disabled={toggling}
+            title={post.is_public ? "Click to make Connections Only" : "Click to make Public"}
+            className={`ml-2 flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${post.is_public
+              ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+              : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+              } ${toggling ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            {post.is_public ? <><Eye size={12} weight="bold" /> Public</> : <><EyeSlash size={12} weight="bold" /> Connections Only</>}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 function CreateBuyRequestModal({ isOpen, onClose, onSave }: { isOpen: boolean; onClose: () => void; onSave: (data: any) => void }) {
-  const [form, setForm] = useState({ title: "", description: "", budget_range: "", deadline: "" });
+  const [form, setForm] = useState({ title: "", description: "", budget_range: "", deadline: "", is_public: false });
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -287,7 +452,7 @@ function CreateBuyRequestModal({ isOpen, onClose, onSave }: { isOpen: boolean; o
     setSaving(true);
     await onSave({ ...form, budget_range: form.budget_range || null, deadline: form.deadline || null });
     setSaving(false);
-    setForm({ title: "", description: "", budget_range: "", deadline: "" });
+    setForm({ title: "", description: "", budget_range: "", deadline: "", is_public: false });
     onClose();
   };
 
@@ -319,9 +484,85 @@ function CreateBuyRequestModal({ isOpen, onClose, onSave }: { isOpen: boolean; o
               <input type="date" value={form.deadline} onChange={(e) => setForm(f => ({ ...f, deadline: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
             </div>
           </div>
+          {/* Visibility */}
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-2">Visibility</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setForm(f => ({ ...f, is_public: false }))}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-[13px] font-medium transition-all ${!form.is_public ? "border-[#4A7DC4] bg-blue-50 text-[#4A7DC4]" : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}>
+                <EyeSlash size={16} /><span>Connections Only</span>
+              </button>
+              <button type="button" onClick={() => setForm(f => ({ ...f, is_public: true }))}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-[13px] font-medium transition-all ${form.is_public ? "border-[#4A7DC4] bg-blue-50 text-[#4A7DC4]" : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}>
+                <Eye size={16} /><span>Public</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">{form.is_public ? "Anyone with your profile link can see this request." : "Only your connections can see this request."}</p>
+          </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] disabled:opacity-50">{saving ? "Creating..." : "New Request"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Buy Request Edit Modal
+// =============================================================================
+
+function EditBuyRequestModal({ post, onClose, onSave }: { post: BuyPost; onClose: () => void; onSave: (data: any) => void }) {
+  const [form, setForm] = useState({
+    title: post.title,
+    description: post.description,
+    budget_range: post.budget_range || "",
+    deadline: post.deadline ? new Date(post.deadline).toISOString().split("T")[0] : "",
+    status: post.status,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({ ...form, budget_range: form.budget_range || null, deadline: form.deadline || null });
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[18px] font-semibold text-gray-900">Edit Request</h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">Title *</label>
+            <input type="text" value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} required minLength={5} maxLength={255} className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+          </div>
+          <div>
+            <label className="block text-[13px] font-medium text-gray-700 mb-1">Description *</label>
+            <textarea value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} required minLength={10} rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Budget Range</label>
+              <input type="text" value={form.budget_range} onChange={(e) => setForm(f => ({ ...f, budget_range: e.target.value }))} placeholder="e.g., $1,000 - $5,000" className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-gray-700 mb-1">Deadline</label>
+              <input type="date" value={form.deadline} onChange={(e) => setForm(f => ({ ...f, deadline: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md text-[14px] focus:outline-none focus:ring-2 focus:ring-[#4A7DC4]/20 focus:border-[#4A7DC4]" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-[14px] font-medium rounded-md hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] disabled:opacity-50">{saving ? "Saving..." : "Save Changes"}</button>
           </div>
         </form>
       </div>
@@ -346,10 +587,26 @@ function MarketplaceContent() {
   // Resources state
   const [resources, setResources] = useState<Resource[]>([]);
   const [showCreateResource, setShowCreateResource] = useState(false);
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "connections">("all");
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
   // Buy requests state
   const [buyPosts, setBuyPosts] = useState<BuyPost[]>([]);
   const [showCreateBuyRequest, setShowCreateBuyRequest] = useState(false);
+  const [buyVisibilityFilter, setBuyVisibilityFilter] = useState<"all" | "public" | "connections">("all");
+  const [editingBuyPost, setEditingBuyPost] = useState<BuyPost | null>(null);
+
+  const toggleBuyPostPublic = async (id: string, isPublic: boolean) => {
+    try {
+      // Optimistic update
+      setBuyPosts(prev => prev.map(p => p.id === id ? { ...p, is_public: isPublic } : p));
+      await apiClient.patch(`/api/v1/buy-posts/${id}`, { is_public: isPublic });
+    } catch (err) {
+      console.error("Failed to update visibility:", err);
+      // Revert on failure
+      setBuyPosts(prev => prev.map(p => p.id === id ? { ...p, is_public: !isPublic } : p));
+    }
+  };
 
   const [loading, setLoading] = useState(true);
 
@@ -398,6 +655,18 @@ function MarketplaceContent() {
     }
   };
 
+  const handleTogglePublic = async (id: string, isPublic: boolean) => {
+    // Optimistic update
+    setResources((prev) => prev.map((r) => r.id === id ? { ...r, is_public: isPublic } : r));
+    try {
+      await apiClient.patch(`/api/v1/resources/${id}/public`, { is_public: isPublic });
+    } catch (err) {
+      // Rollback on failure
+      setResources((prev) => prev.map((r) => r.id === id ? { ...r, is_public: !isPublic } : r));
+      console.error("Failed to update visibility:", err);
+    }
+  };
+
   // Buy request CRUD
   const handleCreateBuyRequest = async (data: any) => {
     try {
@@ -415,6 +684,24 @@ function MarketplaceContent() {
       await apiClient.delete(`/api/v1/buy-posts/${id}`);
     } catch {
       setBuyPosts(prev); // rollback on failure
+    }
+  };
+
+  const handleEditResource = async (id: string, data: any) => {
+    try {
+      const updated = await apiClient.patch<Resource>(`/api/v1/resources/${id}`, data);
+      setResources(prev => prev.map(r => r.id === id ? updated : r));
+    } catch (err) {
+      console.error("Failed to update resource:", err);
+    }
+  };
+
+  const handleEditBuyPost = async (id: string, data: any) => {
+    try {
+      const updated = await apiClient.patch<BuyPost>(`/api/v1/buy-posts/${id}`, data);
+      setBuyPosts(prev => prev.map(p => p.id === id ? updated : p));
+    } catch (err) {
+      console.error("Failed to update buy post:", err);
     }
   };
 
@@ -446,9 +733,8 @@ function MarketplaceContent() {
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
               <button
                 onClick={() => switchTab("resources")}
-                className={`px-4 py-2 text-[13px] font-medium rounded-md transition-colors flex items-center gap-2 ${
-                  activeTab === "resources" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-4 py-2 text-[13px] font-medium rounded-md transition-colors flex items-center gap-2 ${activeTab === "resources" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 <Package size={16} />
                 Offers
@@ -458,9 +744,8 @@ function MarketplaceContent() {
               </button>
               <button
                 onClick={() => switchTab("buy-requests")}
-                className={`px-4 py-2 text-[13px] font-medium rounded-md transition-colors flex items-center gap-2 ${
-                  activeTab === "buy-requests" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-4 py-2 text-[13px] font-medium rounded-md transition-colors flex items-center gap-2 ${activeTab === "buy-requests" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 <ShoppingCart size={16} />
                 Requests
@@ -471,53 +756,154 @@ function MarketplaceContent() {
             </div>
 
             {/* Content */}
-            {activeTab === "resources" && (
-              <>
-                {resources.length === 0 ? (
-                  <div className="bg-white border border-gray-200 rounded-lg py-16 text-center">
-                    <Package size={48} className="mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-[16px] font-semibold text-gray-900 mb-1">No offers yet</h3>
-                    <p className="text-[14px] text-gray-500 mb-4">Create your first offer to start trading</p>
-                    <button onClick={() => setShowCreateResource(true)} className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors inline-flex items-center gap-2">
-                      <Plus size={18} weight="bold" />New Offer
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {resources.map((r) => (
-                      <ResourceCard key={r.id} resource={r} onDelete={() => handleDeleteResource(r.id)} />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            {activeTab === "resources" && (() => {
+              const publicCount = resources.filter(r => r.is_public).length;
+              const connectionsCount = resources.filter(r => !r.is_public).length;
+              const filtered = visibilityFilter === "public"
+                ? resources.filter(r => r.is_public)
+                : visibilityFilter === "connections"
+                  ? resources.filter(r => !r.is_public)
+                  : resources;
 
-            {activeTab === "buy-requests" && (
-              <>
-                {buyPosts.length === 0 ? (
-                  <div className="bg-white border border-gray-200 rounded-lg py-16 text-center">
-                    <ShoppingCart size={48} className="mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-[16px] font-semibold text-gray-900 mb-1">No requests yet</h3>
-                    <p className="text-[14px] text-gray-500 mb-4">Create a request to find what you need</p>
-                    <button onClick={() => setShowCreateBuyRequest(true)} className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors inline-flex items-center gap-2">
-                      <Plus size={18} weight="bold" />New Request
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {buyPosts.map((p) => (
-                      <BuyRequestCard key={p.id} post={p} currentUserId={user?.id} onDelete={() => handleDeleteBuyRequest(p.id)} />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+              return (
+                <>
+                  {/* Filter bar */}
+                  {resources.length > 0 && (
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                        {([
+                          { key: "all", label: "All", count: resources.length },
+                          { key: "public", label: "Public", count: publicCount },
+                          { key: "connections", label: "Connections Only", count: connectionsCount },
+                        ] as const).map(({ key, label, count }) => (
+                          <button
+                            key={key}
+                            onClick={() => setVisibilityFilter(key)}
+                            className={`px-3 py-1.5 text-[12px] font-medium rounded-md transition-colors flex items-center gap-1.5 ${visibilityFilter === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                              }`}
+                          >
+                            {key === "public" && <Eye size={13} />}
+                            {key === "connections" && <EyeSlash size={13} />}
+                            {label}
+                            <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${visibilityFilter === key ? "bg-[#4A7DC4] text-white" : "bg-gray-200 text-gray-500"
+                              }`}>{count}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-[12px] text-gray-400">
+                        {filtered.length} of {resources.length} offers
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Grid */}
+                  {resources.length === 0 ? (
+                    <div className="bg-white border border-gray-200 rounded-lg py-16 text-center">
+                      <Package size={48} className="mx-auto mb-4 text-gray-300" />
+                      <h3 className="text-[16px] font-semibold text-gray-900 mb-1">No offers yet</h3>
+                      <p className="text-[14px] text-gray-500 mb-4">Create your first offer to start trading</p>
+                      <button onClick={() => setShowCreateResource(true)} className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors inline-flex items-center gap-2">
+                        <Plus size={18} weight="bold" />New Offer
+                      </button>
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    <div className="bg-white border border-gray-200 border-dashed rounded-lg py-12 text-center">
+                      <p className="text-[13px] text-gray-400">No offers match this filter.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filtered.map((r) => (
+                        <ResourceCard
+                          key={r.id}
+                          resource={r}
+                          onDelete={() => handleDeleteResource(r.id)}
+                          onTogglePublic={(isPublic) => handleTogglePublic(r.id, isPublic)}
+                          onEdit={() => setEditingResource(r)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
+            {activeTab === "buy-requests" && (() => {
+              const publicCount = buyPosts.filter(p => p.is_public).length;
+              const connectionsCount = buyPosts.filter(p => !p.is_public).length;
+              const filtered = buyPosts
+                .filter(p => buyVisibilityFilter === "all" || (buyVisibilityFilter === "public" ? p.is_public : !p.is_public));
+
+              return (
+                <>
+                  {/* Filter bar */}
+                  {buyPosts.length > 0 && (
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+                        {([{ key: "all", label: "All", count: buyPosts.length }, { key: "public", label: "Public", count: publicCount }, { key: "connections", label: "Connections Only", count: connectionsCount }] as const).map(({ key, label, count }) => (
+                          <button key={key} onClick={() => setBuyVisibilityFilter(key)}
+                            className={`px-3 py-1.5 text-[12px] font-medium rounded-md transition-colors flex items-center gap-1.5 ${buyVisibilityFilter === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                            {key === "public" && <Eye size={13} />}
+                            {key === "connections" && <EyeSlash size={13} />}
+                            {label}
+                            <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${buyVisibilityFilter === key ? "bg-[#4A7DC4] text-white" : "bg-gray-200 text-gray-500"}`}>{count}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-[12px] text-gray-400">{filtered.length} of {buyPosts.length} requests</span>
+                    </div>
+                  )}
+
+                  {/* Grid */}
+                  {buyPosts.length === 0 ? (
+                    <div className="bg-white border border-gray-200 rounded-lg py-16 text-center">
+                      <ShoppingCart size={48} className="mx-auto mb-4 text-gray-300" />
+                      <h3 className="text-[16px] font-semibold text-gray-900 mb-1">No requests yet</h3>
+                      <p className="text-[14px] text-gray-500 mb-4">Create a request to find what you need</p>
+                      <button onClick={() => setShowCreateBuyRequest(true)} className="px-4 py-2 bg-[#4A7DC4] text-white text-[14px] font-medium rounded-md hover:bg-[#3A5A8C] transition-colors inline-flex items-center gap-2">
+                        <Plus size={18} weight="bold" />New Request
+                      </button>
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    <div className="bg-white border border-gray-200 border-dashed rounded-lg py-12 text-center">
+                      <p className="text-[13px] text-gray-400">No requests match this filter.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filtered.map((p) => (
+                        <BuyRequestCard
+                          key={p.id}
+                          post={p}
+                          currentUserId={user?.id}
+                          onDelete={() => handleDeleteBuyRequest(p.id)}
+                          onTogglePublic={(isPublic) => toggleBuyPostPublic(p.id, isPublic)}
+                          onEdit={() => setEditingBuyPost(p)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </main>
       </div>
 
       <CreateResourceModal isOpen={showCreateResource} onClose={() => setShowCreateResource(false)} onSave={handleCreateResource} />
       <CreateBuyRequestModal isOpen={showCreateBuyRequest} onClose={() => setShowCreateBuyRequest(false)} onSave={handleCreateBuyRequest} />
+      {editingResource && (
+        <EditResourceModal
+          resource={editingResource}
+          onClose={() => setEditingResource(null)}
+          onSave={(data) => handleEditResource(editingResource.id, data)}
+        />
+      )}
+      {editingBuyPost && (
+        <EditBuyRequestModal
+          post={editingBuyPost}
+          onClose={() => setEditingBuyPost(null)}
+          onSave={(data) => handleEditBuyPost(editingBuyPost.id, data)}
+        />
+      )}
     </div>
   );
 }
