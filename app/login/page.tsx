@@ -128,11 +128,17 @@ function LoginContent() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(
-          res.status === 401
-            ? "Invalid email or password."
-            : ((data as Record<string, unknown>)?.detail as string) ?? "Authentication failed.",
-        );
+        let errMsg = ((data as Record<string, unknown>)?.detail as string) ?? "";
+
+        if (res.status === 401) {
+          errMsg = "Invalid email or password.";
+        } else if (res.status === 404) {
+          errMsg = "Backend API endpoint not found (404). Check NEXT_PUBLIC_API_URL in Vercel.";
+        } else if (!errMsg) {
+          errMsg = `Authentication failed (Status ${res.status}).`;
+        }
+
+        throw new Error(errMsg);
       }
 
       const data = await res.json();

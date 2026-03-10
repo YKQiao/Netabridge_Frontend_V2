@@ -14,7 +14,7 @@ Deploy the NetaBridge frontend to Vercel.
 
 1. Go to https://vercel.com/new
 2. Import your GitHub repository
-3. Set **Root Directory** to `src/web`
+3. Set **Root Directory** to `./` (repository root)
 4. Framework Preset: **Next.js** (auto-detected)
 5. Add Environment Variables (see below)
 6. Click **Deploy**
@@ -26,7 +26,7 @@ Deploy the NetaBridge frontend to Vercel.
 npm i -g vercel
 
 # Navigate to frontend directory
-cd src/web
+cd .
 
 # Deploy
 vercel
@@ -41,8 +41,8 @@ Set these in Vercel Dashboard → Project → Settings → Environment Variables
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `NEXT_PUBLIC_API_URL` | Backend API URL | `https://idealring-api.azurewebsites.net` |
-| `NEXT_PUBLIC_API_KEY` | API key for backend | `your-api-key` |
+| `NEXT_PUBLIC_API_URL` | Backend API URL | `https://idealring-api.whitepond-90b8fa05.canadacentral.azurecontainerapps.io` |
+| `NEXT_PUBLIC_API_KEY` | API key for backend | `Neta_Is_Here_101` |
 | `NEXT_PUBLIC_ENTRA_CLIENT_ID` | Entra External ID Client ID | `e11df852-1343-...` |
 | `NEXT_PUBLIC_ENTRA_TENANT_ID` | Entra Tenant ID | `75ca4369-27c7-...` |
 | `NEXT_PUBLIC_REDIRECT_URI` | OAuth redirect (your Vercel URL) | `https://yourapp.vercel.app` |
@@ -74,7 +74,7 @@ Create `src/web/vercel.json` if you need custom config:
 | Setting | Value |
 |---------|-------|
 | Framework Preset | Next.js |
-| Root Directory | `src/web` |
+| Root Directory | `./` |
 | Build Command | `npm run build` |
 | Output Directory | `.next` |
 | Install Command | `npm install` |
@@ -97,7 +97,7 @@ Since this is a monorepo with backend in `src/backend`:
 
 ### Vercel Ignore Build Step (Optional)
 
-To only rebuild when frontend changes, create `src/web/vercel-ignore-build.sh`:
+To only rebuild when frontend changes, create `vercel-ignore-build.sh`:
 
 ```bash
 #!/bin/bash
@@ -105,7 +105,7 @@ To only rebuild when frontend changes, create `src/web/vercel-ignore-build.sh`:
 echo "VERCEL_GIT_COMMIT_REF: $VERCEL_GIT_COMMIT_REF"
 
 # Check if changes are in src/web
-git diff HEAD^ HEAD --quiet src/web
+git diff HEAD^ HEAD --quiet app components lib next.config.mjs
 if [ $? -eq 0 ]; then
   echo "No changes in src/web, skipping build"
   exit 0
@@ -117,7 +117,7 @@ fi
 
 Then in Vercel Dashboard → Settings → Git → Ignored Build Step:
 ```
-bash src/web/vercel-ignore-build.sh
+bash vercel-ignore-build.sh
 ```
 
 ## Domain Setup
@@ -132,7 +132,7 @@ bash src/web/vercel-ignore-build.sh
 
 ### Build Fails with "Can't resolve 'tailwindcss'"
 
-Ensure you're building from `src/web` directory, not root.
+Ensure you're building from the repository root.
 
 ### 401 Unauthorized from API
 
@@ -170,7 +170,7 @@ Vercel automatically deploys:
 
 ```bash
 # Local development
-cd src/web
+cd .
 npm run dev -- --port 7000
 
 # Build locally
