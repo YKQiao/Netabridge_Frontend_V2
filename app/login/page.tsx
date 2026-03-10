@@ -91,8 +91,10 @@ function LoginContent() {
     setSubmitting(true);
     setError("");
 
-    // Pass current origin as proxy_base_url to handle local Next.js proxy rewrite scenarios
-    const proxyBaseUrl = encodeURIComponent(window.location.origin);
+    // Pass current origin as proxy_base_url to handle local Next.js proxy rewrite scenarios.
+    // Use NEXT_PUBLIC_REDIRECT_URI if defined to ensure consistency across Vercel previews.
+    const redirectBase = process.env.NEXT_PUBLIC_REDIRECT_URI || window.location.origin;
+    const proxyBaseUrl = encodeURIComponent(redirectBase);
     const loginUrl = `${API_BASE_URL}${AUTH_ENDPOINTS.microsoftLogin}`;
     const separator = loginUrl.includes("?") ? "&" : "?";
     window.location.href = `${loginUrl}${separator}proxy_base_url=${proxyBaseUrl}`;
